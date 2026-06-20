@@ -119,11 +119,40 @@
   tr:hover td { background: #FAFBFD; }
   .col-num { width: 28px; color: var(--text-dim); }
   .col-section select, .col-match select { width: 100%; font-size: 12px; padding: 3px; }
-  .col-header, .col-notes { text-align: center; width: 50px; }
+  .col-header, .col-confirm { text-align: center; width: 56px; }
   .col-qty input { width: 50px; font-size: 12px; padding: 3px; }
   .col-grade select { width: 60px; font-size: 12px; padding: 3px; }
+  .col-price { width: 100px; white-space: nowrap; }
   .reasoning { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
   .no-match { color: var(--text-dim); font-size: 12px; font-style: italic; }
+  .match-text { font-size: 12px; }
+  .price-total { font-weight: 600; }
+  .price-unit { font-size: 11px; color: var(--text-dim); }
+  .price-tbd { color: var(--text-dim); font-style: italic; font-size: 12px; }
+  .search-wrap { position: relative; }
+  .search-wrap input {
+    width: 100%; font-size: 12px; padding: 4px 6px;
+    border: 1px solid var(--border); border-radius: 4px;
+  }
+  .search-results {
+    position: absolute; z-index: 20; top: 100%; left: 0; right: 0;
+    max-height: 220px; overflow-y: auto; margin: 0; padding: 0;
+    background: #fff; border: 1px solid var(--border); border-radius: 0 0 6px 6px;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.12); display: none;
+  }
+  .search-results li { list-style: none; padding: 6px 8px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #EEF1F6; }
+  .search-results li:last-child { border-bottom: none; }
+  .search-results li:hover { background: #EEF2F9; }
+  .search-results .sr-sku { font-weight: 600; color: var(--navy); }
+  .search-results .sr-desc { color: var(--text-dim); }
+  tr.confirm-pending td { background: #FFF8E8; }
+  tr.confirm-pending:hover td { background: #FFF3D6; }
+  .running-total {
+    margin-top: 12px; padding: 10px 14px; background: #F4F6FA;
+    border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+  }
+  .running-total .pending-note { color: #8A6200; font-weight: 600; }
   .badge {
     display: inline-block;
     font-size: 10px;
@@ -185,11 +214,15 @@
   </div>
 
   <div id="stage-match" class="panel" style="display:none;">
-    <h2>3. Review matches</h2>
+    <h2>Spec Confirmation Check</h2>
+    <p style="font-size:12px;color:var(--text-dim);margin-top:-6px;">
+      Exact and Match lines are already locked in &mdash; just check the quantity. Probable Match and Note lines need you to confirm (or search the catalog for) the right item before they're included in the quote.
+    </p>
     <table>
-      <thead><tr><th class="col-num">#</th><th>Status</th><th>Line</th><th>Matched SKU</th><th>Qty</th><th>Grade</th><th>To notes</th></tr></thead>
+      <thead><tr><th class="col-num">#</th><th>Status</th><th>Line</th><th>Match</th><th>Price</th><th>Qty</th><th>Grade</th><th>Confirm</th></tr></thead>
       <tbody id="matchBody"></tbody>
     </table>
+    <div id="runningTotal" class="running-total"></div>
     <div class="btn-row">
       <button class="secondary" id="backToReviewBtn">Back</button>
     </div>
@@ -198,10 +231,10 @@
   <div class="panel" id="quotePanel" style="display:none;">
     <h2>Quote details</h2>
     <div class="quote-info">
-      <div><label>Company</label><input id="companyInput" value="Horizon Turnout Gear"></div>
+      <div><label>Company</label><input id="companyInput" placeholder="Company Name"></div>
       <div><label>Salesman</label><input id="salesmanInput" value="John Grivalsky"></div>
-      <div><label>Salesman Phone</label><input id="salesmanPhoneInput" placeholder="only shown if Company isn't Horizon Turnout Gear"></div>
-      <div><label>Salesman Email</label><input id="salesmanEmailInput" placeholder="only shown if Company isn't Horizon Turnout Gear"></div>
+      <div><label>Salesman Phone</label><input id="salesmanPhoneInput" placeholder="e.g. (407) 555-0123"></div>
+      <div><label>Salesman Email</label><input id="salesmanEmailInput" placeholder="e.g. name@company.com"></div>
       <div><label>Department / Organization</label><input id="deptInput" placeholder="e.g. Indian Harbor Beach Fire Department"></div>
       <div><label>Date</label><input id="dateInput" type="text" placeholder="leave blank for today"></div>
       <div><label>Discount %</label><input id="discountInput" type="number" min="0" max="100" value="0"></div>
@@ -1720,54 +1753,210 @@
         chosenIdx: res.matches.length ? 0 : -1,
         qty: 1,
         grade: 'std',
-        toNotes: res.status === 'NOTE',
+        confirmed: false,
+        searchedItem: null,
       });
     }
     renderMatchTable();
     showStage('match');
   }
 
+  const STATUS_LABELS = { LITERAL: 'Exact', CROSSWALK: 'Match', FUZZY: 'Probable Match', NOTE: 'Note' };
   const STATUS_CLASS = { LITERAL: 'badge-high', CROSSWALK: 'badge-high', FUZZY: 'badge-med', NOTE: 'badge-note' };
+
+  function isAutoStatus(status) { return status === 'LITERAL' || status === 'CROSSWALK'; }
+
+  // The item actually backing a row right now: an explicit catalog search
+  // pick always wins; otherwise fall back to whichever matcher candidate
+  // is selected (works the same for auto rows and for Probable Match rows
+  // that haven't been searched yet).
+  function getResolvedItem(row) {
+    if (row.searchedItem) return row.searchedItem.item;
+    if (row.matches.length && row.chosenIdx >= 0) {
+      const m = row.matches[row.chosenIdx];
+      const hits = catIdx.exactSku(m.sku, m.section);
+      return hits.length ? hits[0].item : m;
+    }
+    return null;
+  }
+
+  // Substring search across a catalog section's items, for the Probable
+  // Match / Note rows where the matcher's own candidates aren't trusted
+  // enough to auto-include.
+  function searchCatalog(catalogSection, query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const pool = catIdx.bySection.get(catalogSection) || [];
+    const out = [];
+    for (const { item } of pool) {
+      const hay = ((item.sku || '') + ' ' + (item.legacySku || '') + ' ' +
+        (item.description || '') + ' ' + (item.category || '')).toLowerCase();
+      if (tokens.every((t) => hay.includes(t))) {
+        out.push({ item });
+        if (out.length >= 200) break;
+      }
+    }
+    out.sort((a, b) => {
+      const aStarts = (a.item.sku || '').toLowerCase().startsWith(q) ? 0 : 1;
+      const bStarts = (b.item.sku || '').toLowerCase().startsWith(q) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return (a.item.sku || '').localeCompare(b.item.sku || '');
+    });
+    return out.slice(0, 25);
+  }
+
+  function matchCellHtml(row, i) {
+    if (isAutoStatus(row.status)) {
+      if (row.matches.length > 1) {
+        const opts = row.matches.map((m, mi) =>
+          '<option value="' + mi + '"' + (mi === row.chosenIdx ? ' selected' : '') + '>' +
+          escapeHtml(m.sku) + ' \u2014 ' + escapeHtml((m.description || '').slice(0, 40)) + '</option>').join('');
+        return '<select data-i="' + i + '" class="matchSelect">' + opts + '</select>';
+      }
+      const m = row.matches[0];
+      return m
+        ? '<span class="match-text">' + escapeHtml(m.sku) + ' \u2014 ' + escapeHtml((m.description || '').slice(0, 50)) + '</span>'
+        : '<span class="no-match">no candidate</span>';
+    }
+    const suggestion = row.matches.length ? row.matches[0] : null;
+    const placeholder = suggestion
+      ? suggestion.sku + ' \u2014 ' + (suggestion.description || '').slice(0, 40) + '?'
+      : 'Type SKU or description\u2026';
+    const displayVal = row.searchedItem
+      ? row.searchedItem.item.sku + ' \u2014 ' + (row.searchedItem.item.description || '')
+      : '';
+    return '<div class="search-wrap">' +
+      '<input type="text" class="searchInput" data-i="' + i + '" autocomplete="off" ' +
+      'placeholder="' + escapeHtml(placeholder) + '" value="' + escapeHtml(displayVal) + '">' +
+      '<ul class="search-results" data-i="' + i + '"></ul>' +
+      '</div>';
+  }
+
+  function priceCellHtml(row, i) {
+    const resolved = getResolvedItem(row);
+    const unit = resolved ? window.MPPdfGen.resolveItemPrice(resolved, row.grade || 'std') : null;
+    if (unit == null) return '<span class="price-tbd">TBD</span>';
+    const ext = unit * (row.qty || 1);
+    return '<span class="price-total">' + window.MPPdfGen.fmtMoney(ext) + '</span>' +
+      (row.qty > 1 ? '<div class="price-unit">' + window.MPPdfGen.fmtMoney(unit) + ' ea</div>' : '');
+  }
+
+  function gradeCellHtml(row, i) {
+    const resolved = getResolvedItem(row);
+    const isGraded = resolved && resolved.priceStd != null && resolved.pricePrm != null;
+    if (!isGraded) return '';
+    return '<select data-i="' + i + '" class="gradeSelect"><option value="std"' + (row.grade === 'std' ? ' selected' : '') + '>Std</option>' +
+      '<option value="prm"' + (row.grade === 'prm' ? ' selected' : '') + '>Prm</option></select>';
+  }
 
   function renderMatchTable() {
     const tbody = $('matchBody');
     tbody.innerHTML = '';
     rows.forEach((row, i) => {
       const tr = document.createElement('tr');
-      const matchOptions = row.matches.map((m, mi) =>
-        '<option value="' + mi + '"' + (mi === row.chosenIdx ? ' selected' : '') + '>' +
-        escapeHtml(m.sku) + ' \u2014 ' + escapeHtml((m.description || '').slice(0, 40)) + ' (' + m.confidence + ')' +
-        '</option>').join('');
-
-      const chosen = row.chosenIdx >= 0 ? row.matches[row.chosenIdx] : null;
-      const fullItem = chosen ? (catIdx.exactSku(chosen.sku, chosen.section)[0] || {}).item : null;
-      const isGraded = fullItem && fullItem.priceStd != null && fullItem.pricePrm != null;
-
+      const needsConfirm = !isAutoStatus(row.status);
+      if (needsConfirm && !row.confirmed) tr.classList.add('confirm-pending');
       tr.innerHTML =
         '<td class="col-num">' + (i + 1) + '</td>' +
-        '<td class="col-badge"><span class="badge ' + (STATUS_CLASS[row.status] || '') + '">' + row.status + '</span></td>' +
+        '<td class="col-badge"><span class="badge ' + (STATUS_CLASS[row.status] || '') + '">' + STATUS_LABELS[row.status] + '</span></td>' +
         '<td class="col-text">' + escapeHtml(row.line) +
         (row.reasoning ? '<div class="reasoning">' + escapeHtml(row.reasoning) + '</div>' : '') + '</td>' +
-        '<td class="col-match">' +
-        (row.matches.length
-          ? '<select data-i="' + i + '" class="matchSelect">' + matchOptions + '</select>'
-          : '<span class="no-match">no candidate</span>') + '</td>' +
-        '<td class="col-qty"><input type="number" min="1" value="' + row.qty + '" data-i="' + i + '" class="qtyInput"' +
-        (row.matches.length ? '' : ' disabled') + '></td>' +
-        '<td class="col-grade">' +
-        (isGraded
-          ? '<select data-i="' + i + '" class="gradeSelect"><option value="std"' + (row.grade === 'std' ? ' selected' : '') + '>Std</option><option value="prm"' + (row.grade === 'prm' ? ' selected' : '') + '>Prm</option></select>'
-          : '') + '</td>' +
-        '<td class="col-notes"><input type="checkbox" data-i="' + i + '" class="notesCheck"' + (row.toNotes ? ' checked' : '') + '></td>';
+        '<td class="col-match">' + matchCellHtml(row, i) + '</td>' +
+        '<td class="col-price" data-i="' + i + '">' + priceCellHtml(row, i) + '</td>' +
+        '<td class="col-qty"><input type="number" min="1" value="' + row.qty + '" data-i="' + i + '" class="qtyInput"></td>' +
+        '<td class="col-grade" data-i="' + i + '">' + gradeCellHtml(row, i) + '</td>' +
+        '<td class="col-confirm">' +
+        (needsConfirm ? '<input type="checkbox" class="confirmCheck" data-i="' + i + '"' + (row.confirmed ? ' checked' : '') + '>' : '') +
+        '</td>';
       tbody.appendChild(tr);
     });
+    recalcRunningTotal();
   }
 
-  function syncMatchEditsFromDom() {
-    document.querySelectorAll('.matchSelect').forEach((sel) => { rows[+sel.dataset.i].chosenIdx = +sel.value; });
-    document.querySelectorAll('.qtyInput').forEach((inp) => { rows[+inp.dataset.i].qty = Math.max(1, parseInt(inp.value, 10) || 1); });
-    document.querySelectorAll('.gradeSelect').forEach((sel) => { rows[+sel.dataset.i].grade = sel.value; });
-    document.querySelectorAll('.notesCheck').forEach((cb) => { rows[+cb.dataset.i].toNotes = cb.checked; });
+  function refreshRowDerived(i) {
+    const row = rows[i];
+    const priceTd = document.querySelector('.col-price[data-i="' + i + '"]');
+    if (priceTd) priceTd.innerHTML = priceCellHtml(row, i);
+    const gradeTd = document.querySelector('.col-grade[data-i="' + i + '"]');
+    if (gradeTd) gradeTd.innerHTML = gradeCellHtml(row, i);
+    recalcRunningTotal();
+  }
+
+  function refreshRowPendingClass(i) {
+    const row = rows[i];
+    const needsConfirm = !isAutoStatus(row.status);
+    const tr = document.querySelectorAll('#matchBody tr')[i];
+    if (tr) tr.classList.toggle('confirm-pending', needsConfirm && !row.confirmed);
+  }
+
+  function showSearchResults(i, query) {
+    const ul = document.querySelector('.search-results[data-i="' + i + '"]');
+    if (!ul) return;
+    const results = searchCatalog(rows[i].catalogSection, query);
+    ul._results = results;
+    if (!results.length) { ul.style.display = 'none'; ul.innerHTML = ''; return; }
+    ul.innerHTML = results.map(({ item }) =>
+      '<li data-sku="' + escapeHtml(item.sku) + '"><span class="sr-sku">' + escapeHtml(item.sku) + '</span> \u2014 ' +
+      '<span class="sr-desc">' + escapeHtml((item.description || '').slice(0, 60)) + '</span></li>').join('');
+    ul.style.display = '';
+  }
+
+  function onMatchBodyInput(e) {
+    const t = e.target;
+    if (t.classList.contains('qtyInput')) {
+      const i = +t.dataset.i;
+      rows[i].qty = Math.max(1, parseInt(t.value, 10) || 1);
+      refreshRowDerived(i);
+    } else if (t.classList.contains('searchInput')) {
+      showSearchResults(+t.dataset.i, t.value);
+    }
+  }
+
+  function onMatchBodyChange(e) {
+    const t = e.target;
+    const i = +t.dataset.i;
+    if (Number.isNaN(i)) return;
+    if (t.classList.contains('matchSelect')) {
+      rows[i].chosenIdx = +t.value;
+      rows[i].searchedItem = null;
+      refreshRowDerived(i);
+    } else if (t.classList.contains('gradeSelect')) {
+      rows[i].grade = t.value;
+      refreshRowDerived(i);
+    } else if (t.classList.contains('confirmCheck')) {
+      rows[i].confirmed = t.checked;
+      refreshRowPendingClass(i);
+      recalcRunningTotal();
+    }
+  }
+
+  function onMatchBodyMousedown(e) {
+    const li = e.target.closest('li[data-sku]');
+    if (!li) return;
+    const ul = li.closest('.search-results');
+    const i = +ul.dataset.i;
+    const picked = (ul._results || []).find(({ item }) => item.sku === li.dataset.sku);
+    if (!picked) return;
+    rows[i].searchedItem = picked;
+    rows[i].chosenIdx = -1;
+    rows[i].confirmed = true;
+    const inp = document.querySelector('.searchInput[data-i="' + i + '"]');
+    if (inp) inp.value = picked.item.sku + ' \u2014 ' + (picked.item.description || '');
+    const cb = document.querySelector('.confirmCheck[data-i="' + i + '"]');
+    if (cb) cb.checked = true;
+    ul.style.display = 'none';
+    refreshRowDerived(i);
+    refreshRowPendingClass(i);
+  }
+
+  function onMatchBodyFocusOut(e) {
+    if (!e.target.classList.contains('searchInput')) return;
+    const i = e.target.dataset.i;
+    setTimeout(() => {
+      const ul = document.querySelector('.search-results[data-i="' + i + '"]');
+      if (ul) ul.style.display = 'none';
+    }, 150);
   }
 
   function escapeHtml(s) {
@@ -1780,15 +1969,14 @@
     const coatNotesLines = [], pantNotesLines = [];
 
     rows.forEach((row) => {
-      if (row.toNotes || row.chosenIdx < 0) {
+      const resolved = getResolvedItem(row);
+      const include = resolved && (isAutoStatus(row.status) || row.confirmed);
+      if (!include) {
         const bucket = row.section === 'coat' ? coatNotesLines : pantNotesLines; // suspender notes fold into pant notes block (PDF has no 3rd notes slot)
         bucket.push('\u2022 ' + row.line);
         return;
       }
-      const match = row.matches[row.chosenIdx];
-      const hits = catIdx.exactSku(match.sku, match.section);
-      const fullItem = hits.length ? hits[0].item : match; // fall back to the flattened match if the full item can't be re-found
-      const item = Object.assign({}, fullItem, { qty: row.qty, grade: row.grade });
+      const item = Object.assign({}, resolved, { qty: row.qty, grade: row.grade });
       if (row.section === 'coat') coatItems.push(item);
       else if (row.section === 'pant') pantItems.push(item);
       else suspItems.push(item);
@@ -1805,8 +1993,29 @@
     return items.reduce((s, it) => s + (window.MPPdfGen.resolveItemPrice(it, it.grade || 'std') ?? 0) * (it.qty ?? 1), 0);
   }
 
+  function recalcRunningTotal() {
+    const el = $('runningTotal');
+    if (!el) return;
+    const { coatItems, pantItems, suspItems } = buildFinalItems();
+    const allIncluded = [...coatItems, ...pantItems, ...suspItems];
+    const total = sumPrice(coatItems) + sumPrice(pantItems) + sumPrice(suspItems);
+    const tbdCount = allIncluded.filter((it) => window.MPPdfGen.resolveItemPrice(it, it.grade || 'std') == null).length;
+    const pendingCount = rows.filter((r) => !isAutoStatus(r.status) && !r.confirmed).length;
+    el.innerHTML =
+      '<span>Running total: <strong>' + window.MPPdfGen.fmtMoney(total) + '</strong>' +
+      (tbdCount ? ' + ' + tbdCount + ' TBD' : '') + '</span>' +
+      (pendingCount ? '<span class="pending-note">' + pendingCount + ' item' + (pendingCount === 1 ? '' : 's') + ' still need' + (pendingCount === 1 ? 's' : '') + ' confirming</span>' : '');
+  }
+
   function onGeneratePdf() {
-    syncMatchEditsFromDom();
+    const pendingCount = rows.filter((r) => !isAutoStatus(r.status) && !r.confirmed).length;
+    if (pendingCount > 0) {
+      const ok = window.confirm(
+        pendingCount + ' Probable Match / Note item' + (pendingCount === 1 ? '' : 's') +
+        " still aren't confirmed and will go to the notes section instead of being priced on the quote. Generate anyway?"
+      );
+      if (!ok) return;
+    }
     const { coatItems, pantItems, suspItems, coatNotes, pantNotes } = buildFinalItems();
     const coatTotal = sumPrice(coatItems);
     const pantTotal = sumPrice(pantItems);
@@ -1830,8 +2039,12 @@
     $('parseSpecBtn').addEventListener('click', onParseSpec);
     $('backToPasteBtn').addEventListener('click', () => showStage('paste'));
     $('runMatcherBtn').addEventListener('click', onRunMatcher);
-    $('backToReviewBtn').addEventListener('click', () => { syncMatchEditsFromDom(); showStage('review'); });
+    $('backToReviewBtn').addEventListener('click', () => showStage('review'));
     $('generatePdfBtn').addEventListener('click', onGeneratePdf);
+    $('matchBody').addEventListener('input', onMatchBodyInput);
+    $('matchBody').addEventListener('change', onMatchBodyChange);
+    $('matchBody').addEventListener('mousedown', onMatchBodyMousedown);
+    $('matchBody').addEventListener('focusout', onMatchBodyFocusOut);
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js').catch(() => {});
     }
