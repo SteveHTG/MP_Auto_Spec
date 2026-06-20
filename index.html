@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MP Spec Matcher | Horizon Turnout Gear</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0D254E">
+<style>
+  :root {
+    --navy: #0D254E;
+    --navy-light: #16356E;
+    --red: #B91C1C;
+    --gold: #B48214;
+    --bg: #F4F6FA;
+    --panel: #FFFFFF;
+    --border: #D8DEE9;
+    --text: #1E2A3A;
+    --text-dim: #5B6B82;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 3px solid var(--red);
+  }
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  header .sub {
+    font-size: 11px;
+    color: #B9C7E0;
+    margin-top: 2px;
+  }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  .status {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 8px 14px;
+    background: #EEF2F9;
+    border-radius: 6px;
+    margin-bottom: 16px;
+  }
+  .status-error {
+    color: #fff;
+    background: var(--red);
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 14px;
+    color: var(--navy);
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  textarea {
+    width: 100%;
+    min-height: 280px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    resize: vertical;
+  }
+  button {
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: var(--navy-light); }
+  button.secondary {
+    background: transparent;
+    color: var(--navy);
+    border: 1px solid var(--border);
+  }
+  button.secondary:hover { background: #EEF2F9; }
+  button.accent { background: var(--red); }
+  button.accent:hover { background: #9B1717; }
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 2px solid var(--border);
+    padding: 6px 8px;
+  }
+  td { padding: 7px 8px; border-bottom: 1px solid #EEF1F6; vertical-align: top; }
+  tr:hover td { background: #FAFBFD; }
+  .col-num { width: 28px; color: var(--text-dim); }
+  .col-section select, .col-match select { width: 100%; font-size: 12px; padding: 3px; }
+  .col-header, .col-notes { text-align: center; width: 50px; }
+  .col-qty input { width: 50px; font-size: 12px; padding: 3px; }
+  .col-grade select { width: 60px; font-size: 12px; padding: 3px; }
+  .reasoning { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+  .no-match { color: var(--text-dim); font-size: 12px; font-style: italic; }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 4px;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .badge-high { background: #1E7A3E; }
+  .badge-med { background: var(--gold); }
+  .badge-note { background: var(--text-dim); }
+  .quote-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .quote-info label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  .quote-info input {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px;
+  }
+  footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 20px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>MP SPEC MATCHER</h1>
+    <div class="sub">Horizon Turnout Gear &nbsp;|&nbsp; Morning Pride Authorized Distributor</div>
+  </div>
+</header>
+
+<main>
+  <div id="statusBar" class="status">Loading&hellip;</div>
+
+  <div id="stage-paste" class="panel" style="display:none;">
+    <h2>1. Paste the build spec</h2>
+    <textarea id="specInput" placeholder="Paste the department's build spec email here&hellip;"></textarea>
+    <div class="btn-row">
+      <button id="parseSpecBtn">Parse Spec</button>
+    </div>
+  </div>
+
+  <div id="stage-review" class="panel" style="display:none;">
+    <h2>2. Check section &amp; header tags</h2>
+    <p style="font-size:12px;color:var(--text-dim);margin-top:-6px;">
+      Each section's first line establishes the base build color/material &mdash; make sure that flag landed on the right line, and fix any line that drifted into the wrong section.
+    </p>
+    <table>
+      <thead><tr><th class="col-num">#</th><th>Line</th><th>Section</th><th>Header?</th></tr></thead>
+      <tbody id="reviewBody"></tbody>
+    </table>
+    <div class="btn-row">
+      <button class="secondary" id="backToPasteBtn">Back</button>
+      <button id="runMatcherBtn">Run Matcher</button>
+    </div>
+  </div>
+
+  <div id="stage-match" class="panel" style="display:none;">
+    <h2>3. Review matches</h2>
+    <table>
+      <thead><tr><th class="col-num">#</th><th>Status</th><th>Line</th><th>Matched SKU</th><th>Qty</th><th>Grade</th><th>To notes</th></tr></thead>
+      <tbody id="matchBody"></tbody>
+    </table>
+    <div class="btn-row">
+      <button class="secondary" id="backToReviewBtn">Back</button>
+    </div>
+  </div>
+
+  <div class="panel" id="quotePanel" style="display:none;">
+    <h2>Quote details</h2>
+    <div class="quote-info">
+      <div><label>Company</label><input id="companyInput" value="Horizon Turnout Gear"></div>
+      <div><label>Salesman</label><input id="salesmanInput" value="John Grivalsky"></div>
+      <div><label>Salesman Phone</label><input id="salesmanPhoneInput" placeholder="only shown if Company isn't Horizon Turnout Gear"></div>
+      <div><label>Salesman Email</label><input id="salesmanEmailInput" placeholder="only shown if Company isn't Horizon Turnout Gear"></div>
+      <div><label>Department / Organization</label><input id="deptInput" placeholder="e.g. Indian Harbor Beach Fire Department"></div>
+      <div><label>Date</label><input id="dateInput" type="text" placeholder="leave blank for today"></div>
+      <div><label>Discount %</label><input id="discountInput" type="number" min="0" max="100" value="0"></div>
+    </div>
+    <div class="btn-row">
+      <button class="accent" id="generatePdfBtn">Generate PDF</button>
+    </div>
+  </div>
+</main>
+
+<footer>MP Spec Matcher &mdash; estimate tool only, not a binding quote.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// Port of catalog_index.py. See that file's docstring/comments for the
+// full rationale behind each piece -- this is a line-for-line port, not a
+// re-derivation, except where noted (variant_code / OUTERSHELL_CATEGORIES,
+// added during validation against the real production catalog -- see
+// PORT_NOTES.md).
+(function (root) {
+  'use strict';
+
+  const ABBREV = {
+    vel: 'velcro', strp: 'strap', rev: 'reverse', bf: 'biflex',
+    hc: 'heatchannel', hw: 'handwarmer', os: 'outershell',
+    rp: 'radiopocket', cs: 'chinstrap', sn: 'snap', lrg: 'large',
+    pkt: 'pocket', susp: 'suspenders', std: 'standard', prm: 'premium',
+    df: 'dynafit', qa: 'quickattach', reinf: 'reinforce',
+    pion: 'pioneer', kv: 'kevlar', nmx: 'nomex', cl: 'closure',
+    fnl: 'notchflapleft', fnr: 'notchflapright', ic: 'incidentcommand',
+    mt: 'mictab', rcvs: 'reverseclipvelcrostrap', dbr: 'dropbagring',
+    wh: 'white', blk: 'black', gld: 'gold', nvy: 'navy',
+  };
+
+  const STOPWORDS = new Set(['the', 'a', 'an', 'with', 'to', 'on', 'in', 'and', 'or', 'of',
+    'for', 'be', 'add', 'at', 'no', 'order', 'specified']);
+
+  const WORD_RE = /[a-z0-9]+/g;
+
+  function stem(w) {
+    if (w.length >= 5 && w.endsWith('ed')) return w.slice(0, -2);
+    if (w.length >= 4 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+    return w;
+  }
+
+  function normalizeWords(text) {
+    const lower = (text || '').toLowerCase();
+    const words = lower.match(WORD_RE) || [];
+    const out = [];
+    for (let w of words) {
+      if (STOPWORDS.has(w)) continue;
+      w = ABBREV[w] || w;
+      out.push(stem(w));
+    }
+    return out;
+  }
+
+  // SKU-prefix hints: supplemental keywords for families whose catalog
+  // 'description' field is unreliable. Confirmed by Steve.
+  const SKU_PREFIX_HINTS = {
+    CFAN: 'angled angle cuff cuffs',
+    CFANIO: 'angled angle cuff cuffs in out inout',
+    CFANH: 'angled angle cuff cuffs',
+    CFANU: 'angled angle cuff cuffs',
+    CFAP: 'angled angle cuff cuffs',
+  };
+
+  // Trim/lettering SKUs encode material+color in a suffix code the
+  // description field often doesn't spell out. Confirmed by Steve.
+  const SKU_SUFFIX_HINTS = {
+    T: 'two tone scotchlite',
+    TL: 'two tone lime scotchlite',
+    TO: 'two tone orange scotchlite',
+    S: 'scotchlite',
+    SL: 'lime scotchlite',
+    SO: 'orange scotchlite',
+    OSL: 'lime oralite',
+    OTL: 'two tone lime oralite',
+    UT: 'two tone ultra',
+    UTL: 'two tone lime ultra',
+    UTO: 'two tone orange ultra',
+    CTL: 'two tone lime comfort trim',
+  };
+
+  // Trim-package shape -> numeric infix in TRC30x/TRP30x SKUs. Confirmed
+  // by Steve; order matters (longer/more-specific phrases first).
+  const TRIM_SHAPE_INFIX = [
+    ['box', '303'],
+    ['u shape', '302'],
+    ['ushape', '302'],
+  ];
+
+  function wordOverlapScore(textA, textB) {
+    const a = new Set(normalizeWords(textA));
+    const b = new Set(normalizeWords(textB));
+    if (a.size === 0 || b.size === 0) return 0.0;
+    let inter = 0;
+    for (const w of a) if (b.has(w)) inter++;
+    return inter / (Math.sqrt(a.size) * Math.sqrt(b.size));
+  }
+
+  function scoreTextForItem(item) {
+    let base = (item.description || '') + ' ' + (item.category || '');
+    const sku = item.sku || '';
+    for (const prefix in SKU_PREFIX_HINTS) {
+      if (sku.startsWith(prefix)) base += ' ' + SKU_PREFIX_HINTS[prefix];
+    }
+    if (sku.startsWith('TRC') || sku.startsWith('TRP')) {
+      for (const suffix in SKU_SUFFIX_HINTS) {
+        if (sku.endsWith('-' + suffix)) base += ' ' + SKU_SUFFIX_HINTS[suffix];
+      }
+    }
+    return base;
+  }
+
+  // The string that actually carries this item's color/material suffix
+  // encoding. The catalog schema has drifted across generations: older
+  // snapshots carry it directly in `sku`; newer ones sometimes collapse
+  // `sku` to one shared generic code per family (e.g. every PFP outershell
+  // color has sku='PFPOS') and preserve the real per-variant code in
+  // `legacySku` instead. Prefer legacySku when present, else sku, so this
+  // works against either generation without guessing which one is loaded.
+  function variantCode(item) {
+    return item.legacySku || item.sku || '';
+  }
+
+  const OUTERSHELL_CATEGORIES = {
+    coat: new Set(['Outer Shell', 'Outershell Material']),
+    lto: new Set(['Outershell', 'Outershell Material']),
+    pfp: new Set(['Outershell', 'Outershell Material']),
+  };
+
+  const SECTIONS = ['coat', 'lto', 'pfp', 'suspenders'];
+
+  class CatalogIndex {
+    constructor(catalog) {
+      this.catalog = catalog;
+      this.bySku = new Map(); // sku -> [{section, idx, item}]
+      this.bySectionCategory = new Map(); // "section||category" -> [{idx,item}]
+      this.suffixOutershell = new Map(); // "section||suf3" -> [{idx,item}]
+      this.bySection = new Map(); // section -> [{idx,item}]
+      for (const sec of SECTIONS) this.bySection.set(sec, []);
+
+      for (const section of SECTIONS) {
+        const items = ((catalog[section] || {}).items) || [];
+        items.forEach((item, idx) => {
+          this._push(this.bySku, item.sku, { section, idx, item });
+          if (item.legacySku) this._push(this.bySku, item.legacySku, { section, idx, item });
+          const catKey = section + '||' + item.category;
+          this._push(this.bySectionCategory, catKey, { idx, item });
+          this.bySection.get(section).push({ idx, item });
+
+          const outCats = OUTERSHELL_CATEGORIES[section];
+          if (outCats && outCats.has(item.category)) {
+            const vcode = (variantCode(item) || '').toUpperCase();
+            if (vcode.length >= 3) {
+              const suf3 = vcode.slice(-3);
+              this._push(this.suffixOutershell, section + '||' + suf3, { idx, item });
+            }
+          }
+        });
+      }
+
+      this.stemVocab = this._buildStemVocab();
+    }
+
+    _push(map, key, val) {
+      if (key == null) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(val);
+    }
+
+    exactSku(token, section) {
+      let hits = this.bySku.get(token) || [];
+      if (section) hits = hits.filter((h) => h.section === section);
+      return hits;
+    }
+
+    skuPrefix(token, section) {
+      const pools = section ? [section] : SECTIONS;
+      const out = [];
+      for (const sec of pools) {
+        for (const { idx, item } of this.bySection.get(sec)) {
+          if ((item.sku || '').startsWith(token)) out.push({ section: sec, idx, item });
+        }
+      }
+      return out;
+    }
+
+    outershellBySuffix3(suffix3, section) {
+      return this.suffixOutershell.get(section + '||' + suffix3) || [];
+    }
+
+    _buildStemVocab() {
+      const stems = new Set();
+      const alphaPrefixRe = /^[A-Z]+/;
+      for (const section of SECTIONS) {
+        const items = ((this.catalog[section] || {}).items) || [];
+        for (const item of items) {
+          const sku = (item.sku || '').toUpperCase();
+          if (!sku) continue;
+          stems.add(sku);
+          const m = alphaPrefixRe.exec(sku);
+          if (m && m[0].length >= 3) stems.add(m[0]);
+          if (item.legacySku) stems.add(item.legacySku.toUpperCase());
+        }
+      }
+      return stems;
+    }
+
+    fuzzyInSection(queryText, section, categoryHint, topN) {
+      topN = topN || 3;
+      let pool;
+      if (categoryHint) {
+        pool = this.bySectionCategory.get(section + '||' + categoryHint);
+        if (!pool || !pool.length) pool = this.bySection.get(section);
+      } else {
+        pool = this.bySection.get(section);
+      }
+      const scored = [];
+      for (const { idx, item } of pool) {
+        const score = wordOverlapScore(queryText, scoreTextForItem(item));
+        if (score > 0) scored.push({ score, idx, item });
+      }
+      scored.sort((a, b) => b.score - a.score);
+      return scored.slice(0, topN);
+    }
+  }
+
+  const CatalogIndexModule = {
+    ABBREV, STOPWORDS, SKU_PREFIX_HINTS, SKU_SUFFIX_HINTS, TRIM_SHAPE_INFIX,
+    OUTERSHELL_CATEGORIES,
+    normalizeWords, wordOverlapScore, scoreTextForItem, variantCode,
+    CatalogIndex,
+  };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = CatalogIndexModule;
+  } else {
+    root.MPCatalogIndex = CatalogIndexModule;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Direct port of closures_pant.py's data tables. See that file's module
+// docstring for the full J110 anomaly writeup -- not reproduced here to
+// avoid drift between two copies of the same explanation; treat
+// closures_pant.py as the source of truth for the reasoning, this file
+// for the data.
+(function (root) {
+  'use strict';
+
+  const CLOSURES_PANT = {
+    J07: { oldKit: 'CLNFV2ZRRH', newKit: 'J07-CL', description: 'J07 N Fly Zip/2 V/Rv Hk on fly', productLine: 'structural' },
+
+    J08: { oldKit: 'CLWFVZ2', newKit: 'J08-CL', description: 'J08 W Fly Zipper/2 Velcro', productLine: 'structural' },
+    JP08: { oldKit: 'CLWFVZ2', newKit: 'JP08-CL', description: 'JP08 Prx W Fly Zipper/2 Velcro', productLine: 'proximity' },
+    J108: { oldKit: 'CLWFVZ2J108', newKit: 'J108-CL', description: 'J108 MPL W Fly Zipper/2 Velcro', productLine: 'pfp' },
+
+    J09: { oldKit: 'CLW2RCT + CL2S', newKit: 'J09-CL', description: 'J09 W Fly 2 Vel/Rv Hk Tb/2sn', productLine: 'structural' },
+    JP09: { oldKit: 'CLW2RCT + CL2S', newKit: 'JP09-CL', description: 'JP09 Prx W Fly 2Vel/Rv Hk/2sn', productLine: 'proximity' },
+    J109: { oldKit: 'CLWFV2J116 + CL2S', newKit: 'J109-CL', description: 'J109 MPL W Fly 2 Vel/RvHk/2 Sn', productLine: 'pfp' },
+
+    J10: { oldKit: 'CLNFVZ2', newKit: 'J10-CL', description: 'J10 N Fly Zip/2 Velcro/1 Sn', productLine: 'structural' },
+    JP10: { oldKit: 'CLNFVZ2', newKit: 'JP10-CL', description: 'JP10 Prx N Fly Zip/2 Vel/1 Sn', productLine: 'proximity' },
+    J110: {
+      oldKit: 'CLNFVZ2J106', newKit: 'J110-CL', description: 'J110 MPL N Fly Zip/2 Vel/1 Sn', productLine: 'pfp',
+      note: "Source page flags this row Proximity+MPP, sharing Old Kit# with J10 -- but every other page's convention plus the catalog's own description text ('J106 MPL...') points to CLNFVZ2J106 being the real PFP/MPL match. Flagged for Steve to confirm.",
+    },
+
+    J11: { oldKit: 'CLNFV2 + CL-FZ', newKit: 'J11-CL', description: 'J11 N Fly Zip/2 Vel/H&D', productLine: 'structural' },
+    JP11: { oldKit: 'CLNFV2 + CL-FZ', newKit: 'JP11-CL', description: 'JP11 Prx N Fly Zip/2 Vel/H&D', productLine: 'proximity' },
+    J111: { oldKit: 'CLNFV2J102 + CL-FZ', newKit: 'J111-CL', description: 'J111 MPL N Fly Zip/2 Vel/H&D', productLine: 'pfp' },
+
+    J12: { oldKit: 'TBD', newKit: 'J12-CL', description: 'J12 W Fly Zipper/2 Vel/Sn', productLine: 'structural' },
+    JP12: { oldKit: 'TBD', newKit: 'JP12-CL', description: 'JP12 Prx W Fly Zipper/2 Vel/Sn', productLine: 'proximity' },
+    J112: { oldKit: 'TBD', newKit: 'J112-CL', description: 'J112 MPL W Fly Zipper/2 Vel/Sn', productLine: 'pfp' },
+
+    J13: { oldKit: 'CLWFV2 + CL-FZ', newKit: 'J13-CL', description: 'J13 W Fly Zipper/2 Velcro/H&D', productLine: 'structural' },
+    JP13: { oldKit: 'CLWFV2 + CL-FZ', newKit: 'JP13-CL', description: 'JP13 Prx W Fly Zip/2 Vel/H&D', productLine: 'proximity' },
+    J113: { oldKit: 'CLWFV2J104 + CL-FZ', newKit: 'J113-CL', description: 'J113 MPL (snap add-ons available)', productLine: 'pfp' },
+
+    J14: { oldKit: 'CLNFV2RCT', newKit: 'J14-CL', description: 'J14 N Fly 2 Vel/Rev Hk Tb', productLine: 'structural' },
+    JP14: { oldKit: 'CLNFV2RCT', newKit: 'JP14-CL', description: 'JP14 Prx N Fly 2 Vel/Rv Hk Tb', productLine: 'proximity' },
+    J114: { oldKit: 'CLNFV2J114', newKit: 'J114-CL', description: 'J114 MPL N Fly 2Vel/Rev Hk Tab', productLine: 'pfp' },
+  };
+
+  const CATALOG_HAS_SKU = {
+    J07: true, J08: true, JP08: true, J108: true,
+    J09: false, JP09: false, J109: true,
+    J10: true, JP10: true, J110: true,
+    J11: true, JP11: true, J111: true,
+    J12: false, JP12: false, J112: false,
+    J13: true, JP13: true, J113: true,
+    J14: true, JP14: true, J114: true,
+  };
+
+  const ClosuresPantModule = { CLOSURES_PANT, CATALOG_HAS_SKU };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ClosuresPantModule;
+  } else {
+    (typeof window !== 'undefined' ? window : globalThis).MPClosuresPant = ClosuresPantModule;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Port of techpack_index.py's lookup behavior, adapted to a different
+// data source. The original loaded extracted_kits_lto_profit_v2.csv (Old
+// Kit #/New Kit #/TP# Code -> rich row with Description). That CSV wasn't
+// available for this port. Steve's live app fetches a flat code -> code
+// crosswalk (cross_reference.json) from GitHub for its own diagram
+// lookup feature, and it serves the same fundamental purpose (old/legacy
+// code -> current catalog code), so this loads that instead.
+//
+// The CSV's "Description" column has no equivalent here, so lookup()
+// results don't carry one (matcher.js degrades gracefully -- it only
+// uses description for the human-readable reasoning string, never for
+// matching logic).
+(function (root) {
+  'use strict';
+
+  const CODE_RE = /[A-Z0-9][A-Z0-9-]+/g;
+
+  function splitCodes(cell) {
+    if (!cell) return [];
+    return (cell.toUpperCase().match(CODE_RE)) || [];
+  }
+
+  class TechPackIndex {
+    constructor(crossReferenceMap) {
+      this.byCode = new Map(); // code -> [resolvedCode, ...]
+      crossReferenceMap = crossReferenceMap || {};
+      for (const rawKey in crossReferenceMap) {
+        const value = crossReferenceMap[rawKey];
+        const codes = new Set(splitCodes(rawKey));
+        for (const c of codes) {
+          if (!this.byCode.has(c)) this.byCode.set(c, []);
+          this.byCode.get(c).push(value);
+        }
+      }
+    }
+
+    lookup(token) {
+      const hits = this.byCode.get((token || '').toUpperCase()) || [];
+      return hits.map((resolved) => ({ oldKit: resolved, description: '' }));
+    }
+
+    lookupFuzzyPrefix(token, minLen) {
+      minLen = minLen || 4;
+      token = (token || '').toUpperCase();
+      if (token.length < minLen) return [];
+      const out = [];
+      const seen = new Set();
+      const tokenSorted = token.split('').sort().join('');
+      for (const code of this.byCode.keys()) {
+        if (seen.has(code)) continue;
+        const sameMultiset = code.length === token.length &&
+          code.split('').sort().join('') === tokenSorted;
+        const prefixMatch = code.startsWith(token.slice(0, minLen)) ||
+          token.startsWith(code.slice(0, minLen));
+        if (sameMultiset || prefixMatch) {
+          seen.add(code);
+          out.push(...this.lookup(code));
+        }
+      }
+      return out;
+    }
+  }
+
+  const TechPackIndexModule = { TechPackIndex };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = TechPackIndexModule;
+  } else {
+    (typeof window !== 'undefined' ? window : globalThis).MPTechPackIndex = TechPackIndexModule;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Port of matcher.py. Mirrors its structure and comments closely so the
+// two stay easy to diff against each other if the Python side gets
+// updated again. See matcher.py's own docstrings for the rationale behind
+// each rule -- not all of it is repeated here.
+(function (root) {
+  'use strict';
+
+  const dep = typeof module !== 'undefined' && module.exports
+    ? { catalogIndex: require('./catalogIndex'), techpackIndex: require('./techpackIndex'), closuresPant: require('./closuresPant') }
+    : { catalogIndex: window.MPCatalogIndex, techpackIndex: window.MPTechPackIndex, closuresPant: window.MPClosuresPant };
+
+  const { wordOverlapScore, scoreTextForItem, variantCode, SKU_SUFFIX_HINTS, TRIM_SHAPE_INFIX } = dep.catalogIndex;
+  const { CLOSURES_PANT, CATALOG_HAS_SKU } = dep.closuresPant;
+
+  const CODE_RE = /\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*\b/g;
+
+  // Order matters: longer/compound color phrases checked before plain ones.
+  const COLOR_WORDS_BY_LEN = [
+    ['dark gold', '2'], ['black gold', 'C'],
+    ['black', 'B'], ['gold', 'D'], ['navy', 'V'], ['tan', 'T'], ['red', 'R'],
+    ['khaki', 'K'], ['yellow', 'Y'], ['bronze', 'Z'], ['gray', 'G'], ['grey', 'G'],
+  ];
+  const COLOR_WORD_SET = new Set(COLOR_WORDS_BY_LEN.map((kv) => kv[0]));
+
+  const MATERIAL_WORDS = [
+    ['stedshield', 'SS'], ['arashield', 'AR'], ['leather', 'LR'], ['kevlar', 'KV'],
+  ];
+
+  const SELF_MATERIAL_PHRASES = ['self material', 'self mat', ' os ', 'matching outershell',
+    'match outershell', 'match os'];
+
+  // Confirmed by Steve as custom/non-catalog requests -- always route to
+  // notes rather than letting a coincidental fuzzy-text score assert a
+  // wrong SKU.
+  const FORCED_NOTE_PHRASES = ['place liner label vertically'];
+
+  function MatchResult(line, section, status, matches, reasoning) {
+    return { line, section, status, matches: matches || [], reasoning: reasoning || '' };
+  }
+
+  function extractCodes(text, stemVocab) {
+    const candidates = (text.toUpperCase().match(CODE_RE)) || [];
+    const out = [];
+    for (const c of candidates) {
+      if (c.length < 3) continue;
+      if (COLOR_WORD_SET.has(c.toLowerCase()) || ['OS', 'RP', 'IC', 'HW'].includes(c)) continue;
+      const hasDigit = /[0-9]/.test(c);
+      const hasHyphen = c.includes('-');
+      if (hasDigit || hasHyphen) {
+        out.push(c);
+      } else if (stemVocab && stemVocab.has(c)) {
+        out.push(c);
+      }
+    }
+    return out;
+  }
+
+  function detectColor(text) {
+    const low = text.toLowerCase();
+    for (const [word, code] of COLOR_WORDS_BY_LEN) {
+      if (low.includes(word)) return [word, code];
+    }
+    return [null, null];
+  }
+
+  function detectMaterial(text) {
+    const low = text.toLowerCase();
+    for (const [word, code] of MATERIAL_WORDS) {
+      if (low.includes(word)) return [word, code];
+    }
+    return [null, null];
+  }
+
+  function isSelfMaterial(text) {
+    const low = ' ' + text.toLowerCase() + ' ';
+    return SELF_MATERIAL_PHRASES.some((p) => low.includes(p));
+  }
+
+  function weightMatch(text) {
+    const m = /(\d{2})/.exec(text);
+    return m ? m[1] : null;
+  }
+
+  class SpecMatcher {
+    constructor(catIdx, techIdx) {
+      this.cat = catIdx;
+      this.tech = techIdx;
+      this.resolvedOsSuffix = {}; // section -> suffix3, e.g. coat -> '75D'
+    }
+
+    resolveHeader(section, catalogSection, text) {
+      const [colorWord, colorCode] = detectColor(text);
+      const weight = weightMatch(text);
+      const candidates = [];
+      if (weight && colorCode) {
+        const suf3 = weight + colorCode;
+        const hits = this.cat.outershellBySuffix3(suf3, catalogSection);
+        if (hits.length) {
+          this.resolvedOsSuffix[catalogSection] = suf3;
+          const { item } = hits[0];
+          candidates.push({
+            sku: item.sku, section: catalogSection, category: item.category,
+            description: item.description, price: item.price,
+            confidence: 'high',
+            reason: `weight code '${weight}' + color '${colorWord}' -> suffix ${suf3}`,
+          });
+        }
+      }
+      return candidates;
+    }
+
+    // hits: array of {section, idx, item}. Returns [item, section, why, confidence] or [null,...].
+    _colorDisambiguate(hits, lineText, catalogSection) {
+      const normHits = hits.map((h) => ({ section: h.section || catalogSection, idx: h.idx, item: h.item }));
+
+      const [colorWord, colorCode] = detectColor(lineText);
+      const [materialWord, materialCode] = detectMaterial(lineText);
+      const weight = weightMatch(lineText);
+
+      if (materialCode) {
+        const matHits = normHits.filter(({ item }) =>
+          item.sku.includes(materialCode) || variantCode(item).includes(materialCode));
+        if (matHits.length) {
+          if (colorCode) {
+            const colorMatHits = matHits.filter(({ item }) => item.sku.endsWith(colorCode));
+            if (colorMatHits.length) {
+              const { section, item } = colorMatHits[0];
+              return [item, section, `material '${materialWord}' + color '${colorWord}'`, 'high'];
+            }
+          }
+          const { section, item } = matHits[0];
+          return [item, section, `material '${materialWord}' match (color unconfirmed)`, 'medium'];
+        } else if (materialCode === 'SS') {
+          const fb = this.resolveMaterialFallback(normHits, lineText, catalogSection);
+          if (fb) return fb;
+        }
+      }
+
+      if (colorCode && weight) {
+        const suf3 = weight + colorCode;
+        for (const { section, item } of normHits) {
+          const vcode = variantCode(item).toUpperCase();
+          if (item.sku.endsWith(suf3) || (item.suffixKey || '').endsWith(suf3) || vcode.endsWith(suf3)) {
+            return [item, section, `weight '${weight}' + color '${colorWord}' -> suffix ${suf3}`, 'high'];
+          }
+        }
+      }
+      if (colorCode) {
+        for (const { section, item } of normHits) {
+          const vcode = variantCode(item).toUpperCase();
+          if ((item.suffixKey || '').endsWith(colorCode) || item.sku.endsWith(colorCode) || vcode.endsWith(colorCode)) {
+            return [item, section, `explicit color '${colorWord}'`, 'high'];
+          }
+        }
+      }
+
+      // Conceptual match takes priority over color defaulting.
+      const bothSides = lineText.toLowerCase().includes('left') && lineText.toLowerCase().includes('right');
+      if (bothSides) {
+        const combined = normHits.filter(({ item }) => {
+          const d = (item.description || '').toLowerCase();
+          return d.includes('both') || d.includes('double');
+        });
+        if (combined.length) {
+          const { section, item } = combined[0];
+          return [item, section, 'line calls for both left & right -- matched combined double-sided item', 'high'];
+        }
+      }
+
+      // Confirmed policy: no color specified at all -> default to whatever
+      // outershell color/material was already chosen for this build.
+      if ((isSelfMaterial(lineText) || !colorCode) && this.resolvedOsSuffix[catalogSection]) {
+        const suf3 = this.resolvedOsSuffix[catalogSection];
+        for (const { section, item } of normHits) {
+          const vcode = variantCode(item).toUpperCase();
+          if (item.sku.endsWith(suf3) || vcode.endsWith(suf3)) {
+            const why = isSelfMaterial(lineText) ? 'self-material' : 'no color specified';
+            return [item, section, `${why} -> defaulted to selected outershell suffix ${suf3} (confirmed policy)`, 'high'];
+          }
+        }
+      }
+
+      // No color/weight signal -- score each candidate's description.
+      const kwScored = normHits.map(({ section, idx, item }) =>
+        ({ score: wordOverlapScore(lineText, scoreTextForItem(item)), section, idx, item }));
+      kwScored.sort((a, b) => b.score - a.score);
+      if (kwScored.length && kwScored[0].score >= 0.20) {
+        const topScore = kwScored[0].score;
+        const runnerUp = kwScored.length > 1 ? kwScored[1].score : 0;
+        if (topScore - runnerUp >= 0.08 || topScore >= 0.45) {
+          const { section, item } = kwScored[0];
+          const conf = topScore >= 0.45 ? 'high' : 'medium';
+          return [item, section, `keyword match on description (score=${topScore.toFixed(2)})`, conf];
+        }
+      }
+
+      // No color signal at all -- default to a priced (non-TBD) variant.
+      const priced = normHits.filter(({ item }) => item.rawPrice != null);
+      const pickPool = priced.length ? priced : normHits;
+      if (pickPool.length) {
+        const { section, item } = pickPool[0];
+        return [item, section, 'no color specified -- defaulted to first priced variant', 'low'];
+      }
+      return [null, null, 'no usable variant found', 'none'];
+    }
+
+    _fallbackSection(section, catalogSection) {
+      if (section === 'pant' && catalogSection === 'pfp') return 'lto';
+      return null;
+    }
+
+    resolveTrimPackage(text, catalogSection, fallbackSec) {
+      const low = text.toLowerCase();
+      let infix = null;
+      for (const [shape, num] of TRIM_SHAPE_INFIX) {
+        if (low.includes(shape)) { infix = num; break; }
+      }
+      if (!infix) return null;
+
+      let bestSuffix = null, bestSuffixScore = 0.0;
+      for (const suffix in SKU_SUFFIX_HINTS) {
+        const s = wordOverlapScore(text, SKU_SUFFIX_HINTS[suffix]);
+        if (s > bestSuffixScore) { bestSuffix = suffix; bestSuffixScore = s; }
+      }
+
+      for (const sec of [catalogSection, fallbackSec]) {
+        if (!sec) continue;
+        for (const prefix of [`TRC${infix}M`, `TRP${infix}`, `TRP${infix}M`]) {
+          if (bestSuffix) {
+            const exactSkuStr = `${prefix}-${bestSuffix}`;
+            const hits = this.cat.exactSku(exactSkuStr, sec);
+            if (hits.length) {
+              const { item } = hits[0];
+              return [item, sec, `trim shape keyword -> infix ${infix}, suffix '${bestSuffix}' (${SKU_SUFFIX_HINTS[bestSuffix]})`];
+            }
+          }
+          const family = this.cat.skuPrefix(prefix, sec);
+          if (family.length) {
+            const scored = [...family].sort((a, b) =>
+              wordOverlapScore(text, scoreTextForItem(b.item)) - wordOverlapScore(text, scoreTextForItem(a.item)));
+            const { item } = scored[0];
+            const gapNote = bestSuffix
+              ? ` -- NOTE: ideal suffix '${bestSuffix}' doesn't exist for infix ${infix}; fell back to closest available variant in this family`
+              : '';
+            return [item, sec, `trim shape keyword -> infix ${infix} family, best suffix match${gapNote}`];
+          }
+        }
+      }
+      return null;
+    }
+
+    resolveMaterialFallback(hitsPool, lineText, catalogSection) {
+      const [, materialCode] = detectMaterial(lineText);
+      if (materialCode !== 'SS') return null;
+      const [colorWord, colorCode] = detectColor(lineText);
+      const arHits = hitsPool.filter(({ item }) =>
+        item.sku.includes('AR') || variantCode(item).toUpperCase().includes('AR'));
+      if (!arHits.length) return null;
+      if (colorCode) {
+        const colorAr = arHits.filter(({ item }) => item.sku.endsWith(colorCode));
+        if (colorAr.length) {
+          const { section, item } = colorAr[0];
+          return [item, section, `Stedshield not offered for this item -- substituted Arashield (confirmed policy) + color '${colorWord}'`, 'high'];
+        }
+      }
+      const { section, item } = arHits[0];
+      return [item, section, 'Stedshield not offered for this item -- substituted Arashield (confirmed policy)', 'medium'];
+    }
+
+    resolveCuff(text, catalogSection, fallbackSec) {
+      const low = text.toLowerCase();
+      if (!low.includes('cuff')) return null;
+      const angled = low.includes('angle') || low.includes('angled');
+      const prefixesPant = angled ? ['CFAN'] : ['CFPC', 'CFPCS'];
+      const prefixesCoat = angled ? ['CFAN'] : ['CFCC', 'CFCCS'];
+
+      const [materialWord, materialCode] = detectMaterial(text);
+      const [colorWord, colorCode] = detectColor(text);
+
+      const attempts = [
+        [catalogSection, catalogSection !== 'coat' ? prefixesPant : prefixesCoat],
+        [fallbackSec, prefixesPant],
+      ];
+      for (const [sec, prefixes] of attempts) {
+        if (!sec) continue;
+        let pool = [];
+        for (const prefix of prefixes) pool = pool.concat(this.cat.skuPrefix(prefix, sec));
+        if (!pool.length) continue;
+
+        if (!materialCode && !colorCode && this.resolvedOsSuffix[sec]) {
+          const suf3 = this.resolvedOsSuffix[sec];
+          const sufHits = pool.filter(({ item }) => item.sku.endsWith(suf3));
+          if (sufHits.length) {
+            const { item } = sufHits[0];
+            return [item, sec, `cuff family (${angled ? 'angled' : 'reinforced/substitute'}) -- no material/color specified, defaulted to selected outershell suffix ${suf3} (confirmed policy)`, 'high'];
+          }
+        }
+        if (materialCode) {
+          let matHits = pool.filter(({ item }) => item.sku.includes(materialCode));
+          if (!matHits.length && materialCode === 'SS') {
+            const fb = this.resolveMaterialFallback(pool, text, sec);
+            if (fb) return fb;
+          }
+          if (matHits.length) {
+            if (colorCode) {
+              const cm = matHits.filter(({ item }) => item.sku.endsWith(colorCode));
+              if (cm.length) {
+                const { section: s2, item } = cm[0];
+                return [item, s2, `cuff family (${angled ? 'angled' : 'reinforced/substitute'}) + material '${materialWord}' + color '${colorWord}'`, 'high'];
+              }
+            }
+            const { section: s2, item } = matHits[0];
+            return [item, s2, `cuff family (${angled ? 'angled' : 'reinforced/substitute'}) + material '${materialWord}'`, 'medium'];
+          }
+        }
+      }
+      return null;
+    }
+
+    resolveClosure(text, catalogSection, fallbackSec) {
+      const m = /\bJP?1?(?:0[7-9]|1[0-4])\b/i.exec(text);
+      if (!m) return null;
+      const code = m[0].toUpperCase();
+      const entry = CLOSURES_PANT[code];
+      if (!entry) return null;
+
+      if (!CATALOG_HAS_SKU[code]) {
+        return ['NOTE', code, entry.description,
+          `Confirmed via tech-pack reference: '${entry.description}' (Old Kit# ${entry.oldKit}) -- no catalog SKU exists for this kit; needs a custom quote.`];
+      }
+
+      const oldKitStems = (entry.oldKit.toUpperCase().match(/[A-Z0-9-]{3,}/g)) || [];
+      for (const sec of [catalogSection, fallbackSec]) {
+        if (!sec) continue;
+        for (const stem of oldKitStems) {
+          const rawHits = this.cat.skuPrefix(stem, sec);
+          let hits = rawHits.filter(({ item }) => {
+            const sku = item.sku;
+            return sku === stem || ['-', '+', ''].includes(sku.slice(stem.length, stem.length + 1));
+          });
+          if (!hits.length) hits = this.cat.exactSku(stem, sec);
+          if (hits.length) {
+            const bareHits = hits.filter(({ item }) => !item.sku.includes('+'));
+            const wantsAddon = /\badd(itional)?\b.*\b(snap|sn|bartack)s?\b/i.test(text);
+            const pool = (wantsAddon || !bareHits.length) ? hits : bareHits;
+            const [item, sec2, why] = this._colorDisambiguate(pool, entry.description, sec);
+            if (item) {
+              return ['MATCH', item, sec2,
+                `Closures-PANT crosswalk: ${code} -> Old Kit# ${entry.oldKit} ('${entry.description}') -- ${why}`];
+            }
+          }
+        }
+      }
+      return ['NOTE', code, entry.description,
+        `Confirmed via tech-pack reference as '${entry.description}' (Old Kit# ${entry.oldKit}), but couldn't locate the exact catalog row -- needs a manual check.`];
+    }
+
+    matchLine(section, catalogSection, text, isHeader) {
+      if (isHeader) {
+        const matches = this.resolveHeader(section, catalogSection, text);
+        if (matches.length) {
+          return MatchResult(text, section, 'LITERAL', matches, 'Header line establishes base outershell color/material.');
+        }
+        return MatchResult(text, section, 'NOTE', [], 'Header line did not resolve to a known outershell suffix code.');
+      }
+
+      const lowText = text.toLowerCase();
+      if (FORCED_NOTE_PHRASES.some((p) => lowText.includes(p))) {
+        return MatchResult(text, section, 'NOTE', [], 'Confirmed custom/non-catalog request -- routed straight to notes.');
+      }
+
+      const fallbackSec = this._fallbackSection(section, catalogSection);
+
+      const closureHit = this.resolveClosure(text, catalogSection, fallbackSec);
+      if (closureHit) {
+        const kind = closureHit[0];
+        if (kind === 'NOTE') {
+          const [, code, desc, why] = closureHit;
+          return MatchResult(text, section, 'NOTE', [], `Closures-PANT crosswalk '${code}' ('${desc}') -- ${why}`);
+        } else {
+          const [, item, sec, why] = closureHit;
+          return MatchResult(text, section, 'CROSSWALK',
+            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            'resolved via authoritative Closures-PANT crosswalk');
+        }
+      }
+
+      const trimHit = this.resolveTrimPackage(text, catalogSection, fallbackSec);
+      if (trimHit) {
+        const [item, sec, why] = trimHit;
+        return MatchResult(text, section, 'CROSSWALK',
+          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+          'resolved via confirmed trim shape/suffix mapping');
+      }
+
+      const cuffHit = this.resolveCuff(text, catalogSection, fallbackSec);
+      if (cuffHit) {
+        const [item, sec, why, conf] = cuffHit;
+        return MatchResult(text, section, 'CROSSWALK',
+          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
+          'resolved via confirmed cuff family + material/color mapping');
+      }
+
+      const codes = extractCodes(text, this.cat.stemVocab);
+      const matches = [];
+      const reasoningBits = [];
+
+      // Sanitized copy for weight/color disambiguation only.
+      let disambigText = text;
+      for (const c of codes) {
+        disambigText = disambigText.replace(new RegExp(c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+      }
+
+      for (const code of codes) {
+        // 1. literal exact sku match
+        let hits = this.cat.exactSku(code, catalogSection);
+        let usedSection = catalogSection;
+        if (!hits.length && fallbackSec) {
+          hits = this.cat.exactSku(code, fallbackSec);
+          usedSection = hits.length ? fallbackSec : catalogSection;
+        }
+        if (!hits.length) hits = this.cat.exactSku(code); // cross-section fallback
+        if (hits.length) {
+          if (hits.length === 1) {
+            const { section: sec, item } = hits[0];
+            matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: `literal SKU match on '${code}'` });
+          } else {
+            const [item, sec, why, conf] = this._colorDisambiguate(hits, disambigText, usedSection);
+            if (item) {
+              matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `literal SKU '${code}' (${hits.length} variants) -- ${why}` });
+            }
+          }
+          reasoningBits.push(`'${code}': literal SKU hit`);
+          continue;
+        }
+
+        // 1b. sku prefix match
+        let prefixHits = this.cat.skuPrefix(code, catalogSection);
+        usedSection = catalogSection;
+        if (!prefixHits.length && fallbackSec) {
+          prefixHits = this.cat.skuPrefix(code, fallbackSec);
+          usedSection = prefixHits.length ? fallbackSec : catalogSection;
+        }
+        if (prefixHits.length) {
+          const [item, sec, why, conf] = this._colorDisambiguate(prefixHits, disambigText, usedSection);
+          if (item) {
+            matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `SKU prefix '${code}' -- ${why}` });
+            reasoningBits.push(`'${code}': sku-prefix hit`);
+            continue;
+          }
+        }
+
+        // 2. tech-pack crosswalk (exact, then fuzzy for OCR/letter-order drift)
+        let tpRows = this.tech.lookup(code);
+        if (!tpRows.length) tpRows = this.tech.lookupFuzzyPrefix(code);
+        if (tpRows.length) {
+          const row = tpRows[0];
+          const oldKit = (row.oldKit || '').trim();
+          const stemCandidates = (oldKit.toUpperCase().match(/[A-Z0-9-]{3,}/g)) || [code];
+          let resolved = false;
+          for (const stem of stemCandidates) {
+            let ph = this.cat.skuPrefix(stem, catalogSection);
+            let usedSec = catalogSection;
+            if (!ph.length && fallbackSec) {
+              ph = this.cat.skuPrefix(stem, fallbackSec);
+              usedSec = ph.length ? fallbackSec : catalogSection;
+            }
+            if (ph.length) {
+              const [item, sec, why, conf] = this._colorDisambiguate(ph, disambigText, usedSec);
+              if (item) {
+                matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `crosswalk '${code}' -> Old Kit# '${stem}' (${row.description || ''}) -- ${why}` });
+                reasoningBits.push(`'${code}': crosswalk via Old Kit# '${stem}'`);
+                resolved = true;
+                break;
+              }
+            }
+          }
+          if (!resolved) {
+            reasoningBits.push(`'${code}': tech-pack row found (${row.description || ''}) but no catalog SKU prefix matched`);
+          }
+        }
+      }
+
+      if (matches.length) {
+        const seen = new Set();
+        const deduped = [];
+        for (const m of matches) {
+          const key = m.sku + '||' + m.section;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          deduped.push(m);
+        }
+        const status = reasoningBits.some((r) => r.includes('crosswalk')) ? 'CROSSWALK' : 'LITERAL';
+        return MatchResult(text, section, status, deduped, reasoningBits.join('; '));
+      }
+
+      // 3. fuzzy description match across the section's catalog pool
+      let fuzzy = this.cat.fuzzyInSection(text, catalogSection, null, 8);
+      if (fallbackSec && (!fuzzy.length || fuzzy[0].score < 0.38)) {
+        const fuzzyFb = this.cat.fuzzyInSection(text, fallbackSec, null, 8);
+        if (fuzzyFb.length && (!fuzzy.length || fuzzyFb[0].score > fuzzy[0].score)) {
+          fuzzy = fuzzyFb;
+          catalogSection = fallbackSec;
+        }
+      }
+      if (fuzzy.length && fuzzy[0].score >= 0.30) {
+        const [materialWord, materialCode] = detectMaterial(text);
+        const [, colorCode] = detectColor(text);
+
+        const adjusted = (score, item) => {
+          let bonus = 0.0;
+          const vcode = variantCode(item).toUpperCase();
+          if (materialCode && (item.sku.includes(materialCode) || vcode.includes(materialCode))) bonus += 0.30;
+          if (colorCode && (item.sku.endsWith(colorCode) || vcode.endsWith(colorCode))) bonus += 0.10;
+          if (!colorCode && !materialCode && this.resolvedOsSuffix[catalogSection]) {
+            const suf3 = this.resolvedOsSuffix[catalogSection];
+            if (item.sku.endsWith(suf3) || vcode.endsWith(suf3)) bonus += 0.30;
+          }
+          return score + bonus;
+        };
+
+        let bestScore = fuzzy[0].score, bestItem = fuzzy[0].item;
+        let bestAdj = adjusted(bestScore, bestItem);
+        for (const f of fuzzy) {
+          if (f.score < fuzzy[0].score - 0.20) continue;
+          const adj = adjusted(f.score, f.item);
+          if (adj > bestAdj) { bestScore = f.score; bestItem = f.item; bestAdj = adj; }
+        }
+
+        const score = bestScore, item = bestItem;
+        const topScore = fuzzy[0].score;
+        const itemVcode = variantCode(item).toUpperCase();
+        const materialMatched = materialCode && (item.sku.includes(materialCode) || itemVcode.includes(materialCode));
+        const materialSubstituted = materialCode === 'SS' && !materialMatched &&
+          (item.sku.includes('AR') || itemVcode.includes('AR') || (item.description || '').toLowerCase().includes('arashield'));
+        const osDefaultMatched = !colorCode && !materialCode && this.resolvedOsSuffix[catalogSection] &&
+          (item.sku.endsWith(this.resolvedOsSuffix[catalogSection]) || itemVcode.endsWith(this.resolvedOsSuffix[catalogSection]));
+
+        const structuredCorroboration = (materialMatched || materialSubstituted || osDefaultMatched) &&
+          (!colorCode || item.sku.endsWith(colorCode) || itemVcode.endsWith(colorCode));
+
+        if (Math.max(score, topScore) >= 0.45 || structuredCorroboration) {
+          let confidence;
+          if (materialSubstituted) {
+            confidence = (colorCode && (item.sku.endsWith(colorCode) || itemVcode.endsWith(colorCode))) ? 'high' : 'medium';
+          } else if (osDefaultMatched) {
+            confidence = 'high';
+          } else if (structuredCorroboration && colorCode) {
+            confidence = 'high';
+          } else {
+            confidence = Math.max(score, topScore) >= 0.45 ? 'medium' : 'low';
+          }
+          let extraFlag = '';
+          if (materialSubstituted) {
+            extraFlag = ' -- Stedshield not offered for this item; substituted Arashield (confirmed policy)';
+          } else if (osDefaultMatched) {
+            extraFlag = ` -- no color specified, defaulted to selected outershell suffix ${this.resolvedOsSuffix[catalogSection]} (confirmed policy)`;
+          } else if (materialCode && !materialMatched) {
+            confidence = 'low';
+            extraFlag = ` -- NOTE: no candidate's SKU carries the '${materialCode}' (${materialWord}) infix; this may not exist in the catalog`;
+          }
+          const rerankNote = item !== fuzzy[0].item ? ` (re-ranked for material '${materialWord}')` : '';
+          return MatchResult(text, section, 'FUZZY',
+            [{ sku: item.sku, section: catalogSection, category: item.category, description: item.description, price: item.price, confidence, reason: `description fuzzy match, score=${score.toFixed(2)}${rerankNote}${extraFlag}` }],
+            'no literal/crosswalk hit; best fuzzy candidates: ' + fuzzy.slice(0, 5).map((f) => `${f.item.sku} (${f.score.toFixed(2)})`).join(', '));
+        }
+
+        return MatchResult(text, section, 'NOTE', [],
+          `best fuzzy score (${topScore.toFixed(2)}) below confidence floor -- routed to notes per policy; closest candidates: ` +
+          fuzzy.slice(0, 5).map((f) => `${f.item.sku} (${f.score.toFixed(2)})`).join(', '));
+      }
+
+      return MatchResult(text, section, 'NOTE', [], 'no literal, crosswalk, or fuzzy match above threshold');
+    }
+  }
+
+  const MatcherModule = { SpecMatcher, extractCodes, detectColor, detectMaterial, isSelfMaterial, MatchResult };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = MatcherModule;
+  } else {
+    (typeof window !== 'undefined' ? window : globalThis).MPMatcher = MatcherModule;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// HTG brand logo (Horizon Turnout Gear), lifted directly from the live
+// MP Gear Builder app source so PDF branding stays consistent across both
+// tools.
+(function (root) {
+  'use strict';
+  const MP_LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAIAAAD2HxkiAAAABmJLR0QA/wD/AP+gvaeTAAAgAElEQVR4nOydZ3wUVduH75nZmt1seu+NFgi99w7SBAGRIlVQFEV9VBBFsTwqdkF5UKTYkK70Dgm9BgIESIEkpLfNlmyfmffDhmUzO7s7G7aFd65fPiQzZ8pu5j/nnPvcBSEIAlhYWDwH6ukbYGH5/w4rQhYWD8OKkIXFw7AiZGHxMKwIWVg8DCtCFhYPw4qQhcXDsCJkYfEwrAhZWDwMK0IWFg/DipCFxcOwImRh8TCsCFlYPAwrQhYWD8OKkIXFw7AiZGHxMKwIWVg8DCtCFhYPw4qQhcXDsCJkYfEwrAhZWDwMK0IWFg/DipCFxcOwImRh8TCsCFlYPAwrQhYWD8OKkIXFw7AiZGHxMKwIWVg8DCtCFhYPw4qQhcXDsCJkYfEwrAhZWDwMK0IWFg/DipCFxcOwImRh8TCsCFlYPAwrQhYWD8OKkIXFw7AiZGHxMKwIWVg8DCtCFhYPw4qQhcXDsCJkYfEwrAifEMjbOYalH+P7j3j6RlgcBiEIwtP3wPLYEIRuyAQy9x6gKHfrerR7J0/fEIsDsD3hkwBxNJ3MvQcAQBD4qp89fTssjsGK8EkAX7vJ9DuRfpa4ftODN8PiKKwImz3E9ZvExauNtqz+1VM3w9IEWBE2eywlhx86TubkeeRmWJoAK8LmDZmThx8+YbGVxNnOsPnAirB5g3/zP6Czb+O7D5D3C91/PyxNgBVhM4a8m4cfOEq/DyeI37a693ZYmggrwmYM/sPPtN1gw96zFx/n5GRFJaN2ev3jXIUFWBE2X4jMLHzPIRsNyLu5ZGl5k8+vHzpRP+o5/Nc/QKO1eoniUv2EWWAwNPkqLMCKsLlCEPjyL4AkbbXBCfybn5p+CT6PyLpl+HClbsgE4toNmlu4dUc/+jni2g1SWd/0q7CwImym4Nt20wqDptmRk028xkOBk4UP9JPnEqcvmO8kbt0xTHmBrJECAChYET4WrAibIQol/sX3jFoShH7REiIzy3Yr8p6FHVWlJqurH/2p1ugXvEEWFTe0f1BqeP5lsk7WsFepZHQzLFZgRdj8MHz+PVlVw7R1vUo/5QUi/Yy1/fjWf/Vjp1Fmj8Tp84A3NvnIFYb3PwMAsk6mn7mQrKwy7WGHo48JK8JmBnHyNP67g2sPKrXhzQ9Ap6M527lLhnc/IWVyw+vvPTK0EgS+ZgNN4+On8N0HDfNea3AWN8GK8PFgRdicICurDG8st2OPoT2wotKweh1lI755p37ai6DVAgBx9qLhoRc4/u0a4vI12vMYFi0hLlylbCQV7HD0seC45zIkCUcul8rqaV7G3gCKIn4irqfvAkL9hclRvj4CK/8Ug8Hw4n/Iqmr6vfbAv1uLhIZg0ycBAHm/0PD+55QxKv7larR3N3LvYQNdN9gA7bKk43PC2ruFfjezQK25jQvzQpMMQqGjZ3AnQRL+gI4RCOKq87spqHfP2QdPLzvuhgs9AUQG+wSIeQIexuWgegOhMxD1GsPUwjMvV1/yq697zJNz5j8PQqFhzQba0SlwOE1Y9FuXOmxraCfEXwIog4EVQVSW1Iwtvbai+JhxgxzlTw0fe8In1tHrupPtHw14um+ci07upp6wvFqG4goC83XP5Zo1pdWq0mqV+ZYemtJ3i52Tt8Lw8282dzdl2V1RrbjOwaFWyvgINFD3aBopIbRTFdleK0IEQXB5jV6jcd0l3CRCfzEPNxh4Ikxvu991eLLz/4KJVXc8fQu2SNQyl18DnVSl5n8e8ol32t04Gw4GOOFalyA3idCIARCEtQQ5TkcdMzdODzFEfk9C6OQoj2F7H0Lfrb7E9GeWT+QBUZJrbs0J6FQut/26VYQsFIIl/DZxfokRYl8hFwBq5NqcEkXWPanO0GjAEIyrrJzAKxARus+Kj5wSx82tufpW9LBrwnDb7cfW3eWTuOnPNFVp2f1Vx4Xxr4cOvs/xc/HNOgxJO3l2KqwIPUBihHjG4MQxPaLSEgIsbW4qreHfs8U/7snBM7PerzgtJnTJuMITt+kAE6XZz0hvI0BOqb15LcqOCKfVUj14MJIcqrp/qGRL36SZFRyRy27TMci6WlLrwqmgCVaEbqVNrN+HM9Ke7hVjw97tw+c8NzB+yoD4HSeTo99Ib1VTYrWpN4EACQAjZLnLIgfj1j9esra2a30p7a4oveL9itOvRA131S16K+wUzfmICd0zsjvdG9seeBz0wxlpl1ePHN/blgJNIAhMHJgYu7uZZamI0Cv7KG1F9E+vyUKs29+myG764l66mOw6WBE6nyWVZ5dXnvq27LBpS5CEv++Tgcuea8vlOPaF+/l43oXAUSZLb1nbFWhQTbcYi5ojJAz96//fZeVgReh82umrAcCHMKAkCQD+Yt7BTwcNSAtrwqmQoAC0Y5qT78/FjJLliK30Zq9XXPDFrYYIG+mkaXogcjOFFaGTaasq76Qq5hAGBMhAXIMg8PfSPh2SApp8Qs4fa5ABvZ14h65GSBjGyHIst6eqK2fWZNo9PMnxVcfmDmuYcTIfPzgUXFcZhIBc4NeKlKWNbj+4ox1roR18xdwNq/HPvsVtO7t4E5OlNzcHtjXfIsZ1a4v2mK9MWCNRK+1XX4iRwAFcjOsNCLJH0sJld+oVsCJ0Mi00VQCAkOCnlvFw3ZJnU51wUgzF3nsTadfG8NYHNjK+eA89lcUxOvkDnsT4JxeINUV7UzS1TI7tpCk/cP9v8y2RbRbLUL7z79JrYIejTgMBcmXhvkSzR21Am+CIQKfFB6DjRnI2/4KEBDvrhK4DAXLiQ/MMRpKrivYPk+c3+WytNU0MHGkusCJ0Gs9XXVlU3ig46PkRyc69BNq5PWfvX2inZmCqmSy9hQDJIYkfHuwfL739OKdqra2y36g5w4rQabxa1kiByOzpUaMHOP0qSEQYZ/tG7JV5jOKGPEeiVtpTWby2cO9EafZjnqo1s3Fs88Wr/5FuI9RQv+nB7uycNb8U7/MjGE26ECAxkgSAiEDh6W+GvTAyOV5IAACgKNIyBVvzLbbyI1fdLgfD3l7E2fwzEhvtqks4gz/u7xwtu/v453nie0LWMAP+uObw/T9TtFIAiNPd7KAuH5PwbDlHbPuoubXXX6q5/FFY33vx3bq3Cu7eKhgWXYLqGhD5gFvixNGeXdGjO/E1G/BVv3hn+l0R4RzflzZP+pyQFSF8VJGeYrY21UZb/UvxvrHxk0mw6l0WrZd/XHFSgmv/Kvqnwr8IYFTDjuAgy8Y5hdIN/9JX7fT35b8ypaNI2FS3GAEfe/1F4PPwz5llQGyehBuUUXpFCfeJjQj//y7Cjury2dLrlI2DlAUfVmT8HtDuHjeAsHD0xEhyXfFeyUPPj/BqendkEwlRfkfPF129XUG7d93OG+s+GNa/S0yTbh8AgCwoavKxzYUu6tISbktP34Wr+P8+J/xP1QWULnnZf6rOX8/5pez2dyfu/f5D6SFzr+IVlel96x+Y/kQC7XjDcDno/h/HTxic4iPgAgCfhwX6CSJDGoa794plQxZsX7zyROadSoUjibCUqobGSEsn22C9EIo3/BPG/+ueMEqvGK2gcbAyISZ03VSl3VSlmcKwDQEdAOA/Vedfr2qUEB6SE+xeKCTAZ9tXYww4UVOnCQvyMW6UyjV70u99+8eVrJyqVZszV23O9PflX/xzWlKMP+VwWb1eZ8CDJHz0YbeccaNy0Y+XMr4e5ifiojOnaE+c5WRYTe/7BNCNFWGzhgtEb+WDvqqiCIOyjCNeH9DBNLuYLb3OIRklm/tv+ck4nbyzumyQsoCyi9hzEG+Vgr00GxoPXCvrNHceyHunhmBow3YOhpoUCAABEsHzY9pMH9V64+5bb3+bIZVr6hTaBV+kR0cHyFU6giAJgsRJ5GK+rE6pAwABD+vWMqhtvH+NXLvrzAOdgejzxqHUOH9VXtGvZ654XUS6U+moLhcSBjX6ZD6ubkp5uO14zrPv7Uf9QtxwLXN61xdvKN4dpX8UmS7FhGPiJ2cKwwEgM/eXFlrnrEGh7duic6dBQiyiUkNI8NYSdP53F1Raw+R+cX8use9+XVOnXrfrxunMMj3GuZBfS5IgEnKVGlyLA07aiT78u2jXGLmt/vzJYFT8lJNiVyUdpMU8sn7LF2MnDXXVpPTJfLUY6aCu2Fm4TdzYUB6Aq7cW7eiaPDfcUO8sBQIAcf0m8epSANAgnG1TFr18i48TJABszSh859k2aQl25o1B/sJ3Znd7ZzYAwMU7VR9tyrxaoFAZ7L8fxYRuhDzPCR/A6xlQX+hmEbqNJ1aEUXrF9sIdYrqlqki98tvSI9kCJzthnhDHrQ/ocEScqLjBM0/emJ5VaVeE5nRrFbL3s2EZNyo/3Xzz5PUKwmbS+1i9nAvuGMt4nAHKQmhKSGYz4MkUIUqS64r3Rhis5keaLMuWKp28pP5+2IBMukRjuSVNSdPUr11ov3aDymrVuSWK3eeLf96Xq9bRxAHVYEISEBsJI54YOmrK/QjtExlO8WQuUSyqudSv3s7qWQCuduIVcQS5w6fvWmvkj/zgMvNq/rf37r4LxeYbbRARKOzXLvSrFzrdXT/25bEt+FyM0qCCIzomjm/qXTcnOCQxVH7PfrtmyBPYE6ZopR9UZLj5ojn8IGu2OwGvQTl3HsieWXFCqtQBAI+DjuwWPXt4cv80RiG/EYHC717s8p+JbT7fcmvDoXzzxKRzokd/UpHev74wEHQETqpRjhbBAEBC6AIMznzReJzRyrzt/q09fRfO5wkU4ZdlR5lEcDuXW3yrhl9/MRcAdAZi5spTRgUa//z3bNG/Z4uign3emtR25jBGC+7RwT6rX+76zuTUb3fe/nl/nlaPA0ANx+elqJEA4MsxGoMeIQCiG1G9tPpi5zKvTqTPkGHyfB6J6xDqcKC586QNR0fLc4cqPTBoyRKGWtvVKTkQAH7Zn5NTLLfcW1KtWrzm4umbDiS6jwnx+WZB5+xfRs8bmczBHi1gKA2YlkA1BKohUDWBagi0juAcIiOuar268Bhz/AhtHzNfpSeGJ0qEHJL4b/kJj1z6Jt+qCLu2DAKAbRkFNg7fln7f9DtOkOdvlf155M6+c/cLy2l0ayQ2VLRmUbfb68aYpEgCGEgEJxGcRIiHv/BIw9Q6evfx5sgk2WPFB3snT5QIp9bdTNJ5JldXlpB+ONo/LbRFlAQAbhXYurHYsEeRU/fLZLM/O/Lqdyef/+TQl5uvGDdaW6iIDxOvWdQt+5cx80Ymm1xzzInRKUSEnuGn8H4myO48edmBnxwRcoF4p+qsRy5diwnLOPSBNv3bNaxt+YnoixahCPLZ3M5vTnyUDyo5yn/352PDAn0AoLRaWVyhmPTOnuiRa3/cSl/CGgASwsVrFnW7+tNTE/vGoo2958o5Ig3SlJm/DsHqMEETDnQpYkI3Sf6kdYZPjggn1WXH62QeufQNgdWx6Bdbs8/drgKAf1cMijRzHDXC46BrX+/14miqP1RKtP+uT8eE+AsLyxXPLt17+loJScInv54f9OK2zzZcqFPSL2+0ifXbvLRP9rrRbz7T2offIDwFxvsypKejn4hAkJejRvBIb4wVnlVLDT1r7jw5Inyh1n5iWRdxQ2DVNKrV42+uvQoAqfEBB/47pEW0xLRLJOD8vWzARCtFmFvGBqx/Z6iIgyVG+08a0mLi4BY90yKLyuU//J05/s1/q6Sq3en5Ry/QZIxPivD9fG7Ha2ueMnXCn4f2mh7z9K3Gy5haBPtH0mpR1Ag5Rl3+1iHYvOjRebxAHxcXx2wandVl/Z6sVPlPyBJFO02VB6Ndbghs+VNdyqnJuFHZr11obKj4xJcjvthy49eDuUI+Z8uy/p1SaCLxTfRKi8xY+6z5Fq0O352Rv2HPzc7T/9AbCAD4+vX+U0e0VtTrKqXquAhfDtbwVk0IF+/9eMDYD06euF4BALv8Wu7yaxmnk0fr5UJSX8b1zeMFGJcTb/FDNhT/G6drsADdFIQsihxx0Sfy1eqLj/GVuJYVFRmDE6Zbxls3U54QEU6us1qExA3Y6AmNHMss79cuFAB8BJwVMzu+/Ww7Wb3OcnRqFz4PmzSkxaQhLa7lVG7ac+vf9HwuB7uVX9Nnzg55vS4hSvLW851mjWnN52EAIOBhfy7p3WLObqW6oUMr5EkKeRLKOS/4RHZOfmGQ8n4YrrrLCzrnE2V8uDuo6VMBeAPdVKUv11xeFdzV0zfiHJ4QEQ703PjEgKB3BbY6NAC4cLdRqiKRgCMSPNY336FFaIc3Q79c3J+DoRv33JbX6wDgfol84WcnP1x7YXjP2BE948IDhfceyIYm++3KqgabnYYa5eyTpFA2Rhusro54A/+tOMEhiQxxbEttDYckirh+twXB3lNg1CGeBBH6Edr2Go+9tu/yAu2aH+uULrGqGwefk4Ykp18pKalU+gi4OEGcyyr/fd/d3/+9DdqHMzoeB40IAroFDBvE6L26PDBKkp9UnASzfzuBIPt8U74M6XFFGOG5+2oKT4IIw/VK2jwx7uGWddOoCZ3ehdFGIiF3w4dDTH/qDcQHP51b89d1uUmEOgNZp0QCHchWhpFkpHeL0BKUJMfIc0Yq8laG9PwspHczmjE+CdbRANw5hcVJQE6K4z4I6z88cersmDGb/VMrGQxvblh3WDMRH+7wMOm7LReHLt78w7ZLjh7I5aBvzOikUTUs0GMoOm54y9dmdnboJEJSzzDxh7fBIYl3K8987iHHqabR7HvCdpqqbYU7Hv88+yQpn4b0vi58ZOfc6tcGAbKltraFtiZFV9tCWxNo0AhJvYDA+YShhuNTiwlqOMJDvkl2T96lhZ1JoyUtYoP2ns3bfTo3NEA0ZUgbh44tq6rX6XEUReZNavfK9I5tU4J7LT7o0BkMSPN+O79cc+kB17e5WG6atwiDDKotRdsDHy8yUItg74UP/CmIpq8gAbnDD7rDd1hC5nAw5PkhiY4eNaxbwt9Hs0urFRv3Z43t05AukSFtkoKSYv0nj2z56et9jFtmDEksrVEXV6sYngFv5iIEgE8qTp4WxdCGWXsbzVuEq0oPmxa4bHBVEL7Dr9VtQQgKRAtt7QhFfh/VA+M0sh7ljouffM7HhUUdXnu6VXSww6sRHAx9bXLXZWtPanW4AXdsZIhhyOH1z3A5j0J+XhrdYt6I5L9O3P/w96wHVfalaADEgKBNHpFKMaFzY6abAIckfio50Ddppvf36t5+fzZ4SpE3Tm6/3sjqoC59k2d+F9L9kG/iAd/k74O7jUx4rl/i86d9YnAEmRUz1nUK9OFz3pva9r9zOjTt8M4tw4d3Sc64VN115t8nrxQzPxBBkIRo/+jwRpYYLgedOTQpe93YD2ek8Th2/u8kIPd5trIoKjDeFWFEnVmyiXKO+Jg44aPQvh1S5k+Im8j8bl1HmqZymrQZRJA0154QJckV5elMWm4JoKmVmykMH544tZW25jGHmrYhCWLV9uw/DuQE+/JC/fjhQQKJD8/XhycRcX19eH5inr+YLxZyfH24Yh9uoETg60Mdcz4/PDEnr/DnfcWjX//38OrxvdIi7V4UsWkVFPKw96a2e7pXzIwvztwoqLPR8rIwMsVK+fhyjnh8/MQsQRgASHAtCqQO4ajMEgsg4F/E84v1kCuvOUuqz24OSPXyOODmKsKB9QVttPaL9VRwRNf4Vn3KXKpAAFDrCTWATKcrkOoAlCgCQi4m5GNAkoAgQh6GIKAzEGodIVfrSRL8RNyRXSP/M7FN+8SG7GwkSUzoE7rhUGmAL9/f106OIwRBSGZLNW3j/U9/O3zet+e3ZVh1ctglafkcnR9SliB0SuwzJs8bS9dTACABWRXU9cuyo0xuxqXE6mSTZNl/+rfz9I3YorkOR+fUZjFpdsQ3wXvWiwgS6nV4tUJXrdRXK3QPatRF1eryOq1MpTdqR1av//tkYa/Fh37en9twCEGIhZzurfzmj2vZJsHqKwNBEGMHaLsbNEck4Py1pM8r46wmtN0vST7vE9Xo/hFkdVCXAUnPW/q+WbIhoP09HjWfv0eYV2s1BMxLaJYiDDGonlLkMml5VdDMnCcAQGcgXvnx0p/H7wOAMT/60ucShna3OnFlLjyLA+G7F7ssnkCfOokEZHLshB1+reswQQnXd1NgWpfkue9EDNYyG9qpUc7c6DHeMA7spipN0ziQPcT9NMvh6FDlPR6zVE75fAey7noPJAmLfrzcp22oD4YBQKvkmPj4eIfOsP1E3tFLxQCg0hqqZdr46MB2SYFDO0UmR1H9Zr6c16lapv3jGE1inhqOz/MxY5v4GQAu+kQ+Gzfhz6JdHg+JmlSXnRVu36fCUzRLEQ5QMq3Il8cLdOjM7RP8e6WG9E4NkdXr31l3TalxeWKILimB80YmvbTqEmU2p1DrP/nrxjdzUzEMi4522H77444b6ZklAYG+MoWGJIFzSwrIPQSBKQMSvlvYxd8szB9B4H+vdssurLua5/zS8IfFid1S5n5Slv6UIpfhe9MVjJPnvB8+wFNXt0uzFGFfFSMRGhD0Adf+7MXIsM4Ry55LTY17NI15UKX6fEsjy0RCuLi0Rm1MNOgUxvWM/umVzkI+52pe7c/78yl7/zpe8MXcTtHR0RwO/b9JpTFwOSjPIiOwVKnLuidF+XwljmE+j7LXkCRsPnH/zgPZsZVDzcM4BDxs2/v9ui06wDAlsUPc5/pPix3nR2h71hdHGpRcAq/kiJZWnk5lYFdzFkk6aVtN1U17EWeeojnNCVtrqr8qPZqds4ah7VuLYDiD+RKGIivndfxrSW9zBQLArGFUN5fpgxJqt086//2IVQu7jugSybW32mYDBIF3Jrde/0Z3IZ8DAO9Pbesnoq5P6AzEvgslkZE0yxIKlS5q1AbfAWv/zbhP2ZVxo6LLy/uUwMcEPkBX8Tszr/bd9dQsBHGhovVv9HSdDUuG8g/6Jq0PaL82qNMuv5brAzu66kpWGGhR0857aDYifKP6wvn8DS/VXmHiImOEoe/VZ3M6zBlO4/9ZWUf1C9955gGXg3ZKDlwwKmX3igGFv49f/XJXY1pRh+BzsTWLur4zuY3poRcJONMGxVu2PHu7ivYMn6y/XF6jAoDI4Eau4Wezq8YtP1lszydm3YFcyzajukfNGmbfD9YpbA5IrUcdcMR7fAazInxMeqhKPi4/6agXFcFgzWxIxwhLBd4qrFv+2/WXV1PzO9wqrKuSPVJmsIQ//6mU89+POPnl0FHdo4AZfiLu3o/7T+4XS9n+TG+asvW5xTTxRPnFslVbswCgXXJQz3aPfCNxgnx51UWV1r4VxICTfx6nscR8OquDv5g+K5xzkaH83ZIWbriQiR7qYg/Gu9mmeYhwiJI66HIWy55rS9mi0eEj3j35057cG/dpBr3X82m8THq1Cdm1vP+Rz4a0i7dvjF36bGrnZJpmLaJ9LUeDtJahzYdztTocAP67sCdqFqp7/Fp5dqEtJxhztp+imVeH+gs+nJ7G8AyPyQEG0SdOxBfXpeicb3lyCs1DhFiT3mF+hE5o0zjeIdG/XQKNhyRpvdJYaa3VkV7/tNBLq0dseLNniJ+tdJ0T+9L0eAAgEnB8hVQDjKUjGwAYk1mM6h0/qne8+fb7ZQ6E4Wbdk959QDOwXzAqJSnCgfDfJnNMnMBkxu5EOqrL3Xk55jQPEdp2JrYGAmSUzUQpA9rTxLkIeNj709qa13gwR621ZRpFEWTaoIRTXw+zNqhDEJDQ6QoAdHpcqaaevG0cjdPJuRvlGIp8+3pfyvbnhybNGcGosIyRbadofNa4HPT9adTRgSuowwRuzkPRyVtTVzUPEV4S2ndcpiVaZ6tzSEug96ta8FTK51ZCH5hMmRIjxGtf7U67iyRh9zn6eIj7FfWWue6fseg2z2aVnbtRlhgjSY6hvpgEPGz1K926tWRagXgH3YgUAKYOSkilE7/TueJef6YOmjJ3Xo45zUOEMgfzsd/n+m/3a/17QDu9TbepljFWVxHPZtOsYvE4aAKzRBXje8csHENveHh9beb2Uw8oeiNJWL2b6og3dWB8n9RGfh61cu30D4+QJFTL6KP1MBSZ3J9pYffswrr75UrL7SiC/GeiO8oA3rRSwMNFtFdXemdJ4+axWE8wnjvIUP7C6BH/SFrZbcnjoInhYmt7O7cI3HmGWoVrw5u9mPczX8zteC67OjOfagxQqPXzv7/4x7H7f7zTs16tX7QyPTlKcvm+4mqBIjpEVKfSK9WGqCCfeSOTlzxLDcISCTkx8T6FSmm09Z4qSOJAQeljmWXzRlKTHQLAlAHxH/yeVVRZz/xUTeCWe1fPxYQu1KByIC2iu2aszaMnlDAuxDMrdiwTBQJAUqSvjdX2+SNTPp3dnrLxl4O5+YyNH3wu9ueS3tZmgBk3q3q+fmTxmrOXCiq3ZuTHh/IPfjIgb9PT0h2TFf88W/D70+9NpZmX8rnYpreHIQjY8NppGSMZ3DHC2pyWwrFMelsFl4O+MtZqgIWzyOO527PXU9VKbNM8RBhmYPRKviSMPCxmms2lZYwtGyCCwIKnUihLiCevV9AuUVgjOdJ35bxO5lvSEv1bPRwD6/VEvVoXFSoe1DP269f6DuwSbaxtZiqvTYuAh6EIYkOEnVOC9n866M6v4+aMSLZrfTx5vZxa3fchs4YlCW3eyeNThwmaVjGqycTpHfj3uY3mIcI0Zrl9twQ4kJWsVbR9i+vHM9MiAhuVuTXWvmZOSU3DkgaPg/68uNvZb4ddWjUiNc4PACpl2julxEdz+21+b3hkkJ0xUu6DumFv7Rr7/u52L/yBE6Rd/9WYUNGaV7vvWN5fbLHsYU6tQnc9nz58PtCXN4nx9LJpkIBUct2aMzuO7QmbzDAFowrYNsrlWtLKulXGBJ+LUewrEgsPT9sYLR/+Yt4/H/afOjAeABAETPFE1XLts5+e+utEge2TEAS5YOWJ9Mtl+y7crwE9x9AAACAASURBVFVoAEDHzIl8VPfov5b2tT00vXjXqiP1PEcWPJpGFeZwCqzHgbnPoztpBiJM1VYPrC9g0rLMkdcqExECwOT+ceZlN421kJgzpGNEfJjo6OeD+rV7ZIT4ZGZ7kzBwgpzz9bnj12ytI7/z09kzWWVAAPLQQsU8kmN4l8iFY2zN7mxEMPVsHRIfZtV25RQ0qFujfoNxpkkf3Ym3izAQV697sJehxwxCOmDPUqgZRZoG+fJS4x/JVatzQIQkwLP9YzPXPEURfEK4yMcskggnyIWrLql19Lpasf7iD9uuCwWcgZ2jR3ROaLgNR8Kplkxpa2OeeSWnxtouBIGJfak+rs7F9hqS0/H3dCJGWrxXhPE62Qu1mWfyNzGcEAKAiHCg7sqsr87qmHVr7RIeGfFkKqZhvgRJGnAcJwgu3WjQr7HVNL9M8fV2ahVokoRla8/9d9NliYj32Us9X57Yrn/HBqcFA05YM6hYEiThj7KeHeN2kaxeY/V95GoR6sCtInRWxQTn4r0i3Phg93elhx1Kmxejd6BxSbX6wm1GcaXmy4lZ9+jNGBSMCrSR+8zST2DtvlzKWHftPze/+ivTR8BZPKV9dKgYAO5XPJrSONQZGqsjGhHyGplqcILMLrT6vXVpEeRSV1LUvavnfrjzo5YfH+8VYYrW6jDJGi21jrnJGwhGPeGYHlHYw2AFy8V3S0iSNOB2FNI3lWpDKpeq95wvMTsJ+Ip5i6e0//6NvmnJDR4CBoPptEhZtQMr6W3i/ACAUGu/eL7tvd/GvNfYOzSv1Ja5YlI/F9pI3ZzzQuqg65V78FIRhhnq/QmHX1rdVSX2G5lRXMVohpAU4Tv54YN4/na1DduMsevDGWh7XK9oyiJeqL+Az33077hXKpOIuH3aRwb4PnpuUAwFAAxBfbn8jzY6UM46WMIncYJQqkP8eBiKvDquRWr8oxWavBJbHggT+tCHfTgFAenWHFDnRC6sd9BkvFSEDg0sjSgw3j6JYyb1ZRuvr96d89Oe3HEfpGdaWS4zsnx6uxA/PgBUy7UHL5fStiFIUo/jetxg6YdtSXKkeGinRu7Lh/47yBQZXF6rulNEcz/xYRIMQQN4PnyUc+JKMXNTba1CBzhOkqTg4Vh0UPtHOZFzS22JsGNSIGWx1In4EC5PpWWCQJANAU0sSeBSvFSEEXoax2IbpIviuibP3RhAdTSzjUpr+PD3rOW/XT+TXTV86fE3f776wErdohA//u/v9PbhcwDgi63Zlg1IEhQqrfEXhiyZ0sa8MyyqVAGAASeyC2uv3K2kVXJSpD9OEnoCBwCNDi+uZPot9U4N/erFrvAwFhEAxpsF8t+lE7wJBIGBHVxV2yjU4L41gx3BaTe8MteTl4ownJmfmol3wwcyT6xGC0GSm47c67bo4Es/XLyaR/NQdkkJ3PvxgKhg4cW71fO+PU/RCILAZ+suHDxdwLx36tYiyFwJ8749/9IP5z7fnJVTVGetLxVwMQ6GEg+NGffLmI4XEARG9YgGgNsFDR+tbbxfq9iGb+zOrSKTOGkZ4hoRoiT5mGXtHGJvRBrgHs6ASouXitDfEVOyHOPfYFCzmgl6A7HtVNGwpce6v3pw5bbs6/frzOWQluA/pGMEAPx29F7GjUZJnbU6/I99tzfvv4sAysUwFEHzimTbDufUKWzNbF97+tEyepVMs+7g/RV/Ze+9aDXsDcdJkiQ5DxNYHbpIjfOwgbG+2rELj6IZTcsPCnn91du2vAWGdYlwRRB8IK5xZz1gH6WU1Dg2wnIPXipCX8ZhEwBwix/i9EQJ+WXKlVuzB799tM38Pa/8eOl2kQwAjlwtM7mYIWijzorPw9JaBK//eLiPgIMgCAdD2yQGdWwZtuXoHRtX6ZgUYO5TFuovmDM0fnQ3q6GuJTVKnCBNRt2N+7Mzc+jTsVmSfq0MADLvVt99WIxpUp8YozMQhmHlNbaGHuEBQleE+Ybirg2VopCIqNwXnuQIXipCEemACO+5MiKmqk7798nCvm8eCZ+y47nPzhhHm88PSezXllrsacdXTxuTiJpokxQ0vj9NtJ6JB5XKxeOS7v46xuilieJ6lNDaSNR4s6DRwiZJws50aspgWs7crFjxe0Ou0b8PN0QPRwQJe6cGA0miCChsDkcBYEgn50fBBzs46XhMumsqAPPGAFovFaFDmZ1KuO5ITGTAG24pPkz81QudLBsIBTT/4KhQXwAgCBJDqV81SYIeJz+Z0zUuTLz6la57PxrAw/CdJ+/9fYS+1s3uU/dPXCwNFoj4Zk9SWQ0jw0bOgzrdwzXGLUfyTd42swZGI7IavR7nYHaehOEuEGGQwa3+K90qc5MC3JrslCFeKkKHUGDuSJVphMdB//mwP/PknAggCIJwORiGohQdanR4q9hHffiQThEX/zehd7uIk1dLSqoeTV2qZOrfjt7+4LdzGdkPyuvqdWaOOCiCdG3FaDI8qFMU9vC1VlZVf+R8w2RSrdbpNDoAsMylT6FfWqiI7i3zODBPmOAUBHrdrLyTXFIHuAG8Kc+Fl4rQoaKC7gwMHd0jqk2sY6nfOBbyAwB5vc7Xh6pkfzF/w7IhLWL8fj94V6vDSZLcc/7eK6uP7zyde/1eVV5ZncKgkes1BEryuNiI7rFHvhs3f5z9zGgESX6x+breQKAP5593Cxu8kQIfZme02xPyudjgjk62kea5uEirJW9KM9cU7G4tvUcavMhM6o1DZHBQVzw3Vt5iEgpMwax+YMPbt7xWtezX88uf75YUST2bWMj97KXeE97dt/R/54S+yK2Hagn2E84b2XZS/5TYEF9zHxqSJNftvnXsclG7pGCRkPvX4TvzxradP65RYdp1e+9sPZGPcFC/MLG8sh43EL4PoyL9H57qh+3X5Br9C+NsVbQd2SXSWqq4pnGLH3xDENJOw9S25BSeq88vRX3e93NtvLJDeKkI5agD2Yp83Oj6VMJsDkaLaZ7L52JHLj24WyDtnRry9aKBlGbd24QN7BT97/k8bW3D55ozIvXzeX0Cfen9Hjfsu1VSpTx3s2Fh42Y+1ee2X/uIQF9+rUKLIAiHh+EGQshr6PcC/Rq+5+IKxaXbFXZE2C0KQRzwRmDCy1EjdxVuD3q4ZF/OER8TJyTopb3qnal2CnGId8VSeOlwVIE5MIEON7hv8efQ5TKNlcA/u2AYSpAkF8PCAkTzRrXBEOLU9RIcp3mopw5tSSLAw7CEcMmW90b9/PoQawoEs+kciiCzR6e+Na0zpUGrWP9dnwwLEPF0GoNObQAAn4c5L6JCfNskBQGATo8TuJ0lu+hgHyZ5/h3iijCiZYuXRiZMmRA3qWPKC8mtFs6PfuofiWtzTIXo6sFriqiD14qwEnMgRj5a776cBeVS9aYjjHJtWIIAIuByjaNTIQfR6w1gxdtbp8cjfH39uMIlk7o/09eOQ+zKl3v7ifkAMHNUmw/n9ogJo7EVp8YHbP1gcH2tiiRJDEWwh5NDPg9b+Vo/4+8GutcBhae6Ma17wxw1yskQxR3yTczhB5KAAECmwFVeckZiQY24N6LfNl46HC13ZNWhhcathT6+2p49Z3jS4xQnBDPtGXCS17jX35Wen1Ncl/37ND1OiIX2RwRdWoWfWjOpTqGNCLb15urYMmR034Q9Gfe5nAbvGSM90iLFPjwEQMC3/1yO6Brx+Zabdps9Jhd8oio5olCXrSLG4/UvSq//FpCmQr3i+ffSnrCU60Bqk3i9zM/xuKcmU1hZfzLrcasamGRg2RN+u+V6x5RQPg9jokAjvj68XSdzP1h7usZKZm4jH7/UHQC4XAQ3EyGGIhHBIj9fPspghNazdYhDyYWbBo4gO/1cOCJF9Lqvy47czvlpgsyWP5Pb8FIRFnL9tIyzjyBAdla5tczAzjOM6nXbwFfsY9QBZU5IkOS9UhmTYChzamTqlb9d2LTv1gdrz9holpYSHBUq5HIQivJVGr1IgFVK7ducMBQZ6oJVe0s2BbQnrbiY6Zy0IhVsUHdVe0V1Ci8VoQFBc/gOVMB1czHk/RfpQwqZczRLWipHAABv7MGMIoi/mJ9xzbHo5ACJIC0lFADuFtoZmfv6cP0lmHlKAZwgK2tVeYW1fGZJu0d2bWJxHofIEoQeESdQNqoR3n7f1tlOctYHAB2zWs6uxitugpZsvgOhX4OY5UR0FmW1ajnjjE+WqHX4pZwanQEFAMLCHNI9NWzLsdwHFQ4UG0QRZM83E7q0Dvf3tTNWnDg0JjqMa9794jghFGI6A84kIQAADO8SiaHuMC1+EdqL0hleFMVIOUKlI8tXtnFzrjdreK8IbwodeOG1V1e6ucxAIeOAWku2phcq1QalDgrq0GlfnJ351VlZ/SNJTxyYrNYaNh6gJl+zDYYiEhFPbyB+23fDbmPz1QgeF/v32/EJUX52nWaMBEv4zKviPA7nfaL+DDAriYOhBeIQBEDjPGsK2xPa4ZYjPSEC5AS5WyfZldKmm4J+3t/goi3XIBk3q7acLFx/KM+0d3i32JRo/2cGOFxNGkGQW/lVP/+TWVplpxelrEZ0aBGaEhNgIzcchRFd3VRX8N2wgaYiSnJJ4MLg/peEYTqO01yF9e5NuGgNLxahwIHXbQVHlM13x+vZBJfblCEZTpALV1+89DDfLo+DzhmetHvFgJdGP0q2j6LIJ/N7tIl32K9SpdH7+HBQFAmQWE0JY7SAWuYsdWjtemRX568W0lLD8RkfN0mO8QFgDxkBAFySQLnO6wktfHo9glesk9ASw2wJngRkU0DauxEDZc6bKjAhzN/h3EeVdZoFP1zYd6HB6BLqL9jz0cD2iTTBsn3bRxIkODrzSo6VVEjlIgGXEtZoieX0D3FEhR2TAgN9ebUKB2I+m8x1YdjQhGlT626uDuoKAFwgfJ2XG4rtCe0wRk4fVkfhu5BuL0eNcLMCAWDY0mO9Xz9UIWXkhUiQ5G9H77V/aZ9JgQDw6xs9aBX4EJIgSZlS+9v+OwyTbUtEfABQqnUypdWhslFqBgsPNQRBmOsQQSAswFX51yy5KQh5N3ygcekY8RWFySvtHsIQvXf0hF5xE7R0UTNaBihjXnjVqZTVqi/l1Gy3UvbdBE6QW9ILOy7cP+/b8zXyR9poGS1hsuDmK+IdvfRg+geHmczXJg5qxeWgJAm/7bdjm8EtRGgZbGWbIHtmWBcRFcBL0DnNQUrHWkdtk6hlZO1UIp55Goz0aG115qbSGlb9e7fNC3tmrDxjTFFjTp+2TG2/y+d2PXy+aMcJ+2ksUmICv35tMI+LbTmSvWlfFn0jBAE6N1GVRqtUOWBqCpS4L5AaAPwI7fPSrAP3/37x4nYMnJYbykuWKLx3TsgwzYxx1u4R2sT6d06hF+Hl3JrZX527W0w/re2SEvjOZKb1TBOj/Eb3TdhxIm/iIPv2Uq2eMJYuJGyOYC09chY80+Z+Wc3WY5mTB3dkclducF4z57Py4zNrrbxWHgN2icIOBmb3pnQk6Mm5PD+E6tJh5H/7cvv/54g1Bb48puXxL4fGhjowil4wvu3Riw8eVNhfmSwskwHAtBFtZ4+hz4PcYB21GI6SQAJAeY3ctOtafq2NuWiov/uKOqAkOULOKJ+Vo7CGGTswnOxZ8zB0NRiKTB0Ub7ndgJMhfvxBHai52Iy8N7Xd1ws68RyMwOieGhYZIv7lH/vhC+P6tZg0uNXzT7W9nlthQ0KWhhkTRvNMbrG8z2sHW8/+989j9HFb5pWqXE1XdVmYayIqdLYDmtyVhsZ7RXiX2TqhO7PHmtM7NSSczkLIwZBn+sTuWTHwvaltAaj/yG0ZhU2ITEcQmDAgccO+O7bzZAMAn4ctmtz15r2qJT8e/fMgjXnG+MYiaDzUGt5lKIoAQMaNCgAorVEt+Pb8gYs0jqwtoh8r37lDPKVgZCdvAmxPaIczPoyKAXlKhGN72Lm9JZPb+oKBVKlI7SPl3C2W3yt3wCnUxJBuMYp63frdNGUwLDl8IZ8kISOz0FoDy5pwlOWJ0ppHIVHf77wttVgSbBHlRhHK8+w3ahJeYpjxXhHu8GtlYDBvdqKtzCE6JttJ9MDjose+eyoyWGTeGWIoEtgk437XNqEhAcKfdtxgklxj+oh2ARJhiL+P5S7EinUUSCBJqJE1GEjNh7Knb1a2mLlrzpdnb9x/VKIjLEDAPO/j4xCvk7XRMqrl2gS8xGPGK26CliqOz0mR/ZRYAvdWmTTRyqLUriUdUoJbxEhQM8+X6GDRhsP5By6VMi92bYSDoUtmdq6Uqrcfs98txIX7R4dIhvWgsab2aR/rJxbQiBCBOqWu+qHvgaRxNW+1Dt+aXvDOL1fNN6bGOZx4rgmMctlYVIoJb/KdFhX1OHivCAHgH78WdtsEu7G2ljl+Ikb9gN5ACsxKfxZWKt9df238ivThS4+pHUwYNWNky1ZxAd9svsao8BNC/rY/SyqnBtoP7JLwwrhOljmdjO8J8uGotFMyTTBnWW2jszFf6nwcnlK4aix6WhSjZtNb2KUaoxlQUQhyY20tcy7n1ACAXT3oDQStM8rpW1U//ONY2AcHQz9+qce9Etlv++0fiACUVSt+3XONsv3XnTe+2XiVJnQQAQEXQx52kJ1SggQ86nzJt3G6jT6pLq/150doeysdqDzlELUcbymd7dUiZJLIwFM94fB3j7eYszvgma1vrbtqw5VZbyDqtfQOx5TiakwY3CW6W2rYyt+vqjR2Uq0aE8acvFKgNzTqb3/edr2sut5yMIwhKPmoIwSJiDu+TyylDWWBvndqqKuje4fJ87kum/OnaN2aH8wGXi3Cao59L+EQD4lQq8cLKpQ6A/H9rjut5+3++K8b98tpFtO1etxawphbBbKs+3WOXnfK0JSKWtVP2+1F7jYYYAilqtELIinGX16vtUx2Kldpq+u05muu856i1pPyEzXqCSU+3A5JLqyHBQCjlC5ZozfSQ1WS6jKTj0N4tQivC8LsFnuJdby6vdORKnUf/3mj1bzdg985unJr9onrFaZI+VqFzlpNvHKpuv+bh/dfKHll9aWRy44XV9l/m6g0ug4t/ZbNaf9PRn6t3FYAh7FPQxAQN654gSKI3oBbLlHcL1WoNAbE7Fa7tQyOCm40HfCxKAgzrLML881wSGKoaxxljKAkuf7B7gAPTWfM8YqJqTUMCHraJ3akzal5slaKAOkpvxlzSBJO3aw8dbNhkMnnYgFiXoVUDdYXWtQ6fMLHGcbfu7928Jv5nSf3j7MWUaTTG+6VVgEQg7tG9O0QdvxK4cSBVvMCIgBqLV5QquFyGk3tlGodNE5vYUSj00Pj1UIEgae6R/2y75Fx0nICPHVg/Gd/uyoNaWd1ub+LM1m21VRtK9w5JHGaS69iF6/uCQHg++ButgUmJnQRerfWmmSIVo+XS9XA5yM8Rm+6Grl25ldne79+8NDlMssBLEGQucVVJnczHhdNjBJKFVY7Tx4Xq5bqZAod5VTGyaSl21pkEE22ZUoEvVJNnYi2jvWjtaM6hcHK+y46szlK1K3hILR4rwiHqAoXyK5LucIfgrvabpmso5ZA8SJQBBxZEb6aJx334cm0Bft++OdOlaxhwHmrUNZr8aEvtzdaMfsnvWjGR8dKquhfQE/3b92jbaROj98raTTtNBgIALB0HR3Tt1Wf9nEDOjVySe+XFmbu5lpEl9vquYHxjD6Y4wxySxpLJstgrsZ7RThLfmOS4u53lceDEP2ZAFtRPK01XizCJpFbKn97XWbizH+f+Thj2YbrvRYfunZPuvNso0y16/fnHTz/YPzSA7SW0rTk0M6towDg3/RGg3ljkITlEoWPgDthYJsJA1PNNwp4WBuzUvW0lqepAxM4zBKWOoQvruuietzkrnbBEWSvLytC68wPHTE/bDgJSJK+TmyzrnIX78ij7HT0BmLfhZKvd2Rr9TgA+Ps0GtYO7RoJAFfvVs785Cht9GCtTA0AW4/kmI9IDTiJoahlKJOAxxHwaILCOpiNNuX1epmFB3lYgKBfO/qQkcehf32h6xYnTGSIYplY4F2N94pQhXLucf1yuQEAEKqz5fTMMBFGc0dnIOZ9d33yf68Mf+/CqVu104cnGrfvSr+3fN0Fy/YdWoYCQFZe1V8HH6Uw1epxsQ+fLpSJvjdrn9hoESK/lOYfMaE3I1d7h3BPNud/JK3ccBW7eK8IjXwa1OOWIMS2CFO0Un/cu8o+uoK6esPNQkVRlVpWr8/Iqvl596Mp4ue/X7XMnD+8R/yYfkkAsGzN6dqH00utzsDncWrqid1nC3afLbhXpuByMB6XY61mfXJUI4PNTbqFzfG9Y52+aj9AaTUExFkQCLJHQl0L9QjeLsISjliiVmI2g/AQIDs/oSNSIyIBJzFC3Dkl0PRTWKXZldHIn6uogmqhwVBkxfxeAFBZq+o1b7Mx/KK0uj6nQnmnVDf/q4z5X2XsPlPoI+AJ+VxrqdbCAhr5dmUX0qzKhgUIerZ2pgtbkEHVwvXuLGd8ois8lCWMglevEwJAK23NJJn9hPADlIXHLOqHNF8QBDomBT7VLap7q6D2iYGRQTTzljuF0inLD92615CEwtLVEwAigkX+vvw6hbaoXP70kj27V47lBosws3md5RyPAiW1YZZZNJM543vHnL7ltEyE3dWliOvD2ne7uB4wc7xdhE8p8pj8P4YoC953w924GCEP65UaOqpb5PjesTEhdpzXW8UFXNs0pbBcMWHpgcycqlZxNClMfX14Z9Y9N3/l8dO3ytNvViQ8+5u56j6c3XVsLztvrkBfPgdDTKFP2YX0fnbje8f855crzipn39L15m4SkN32x6Ju8gDxdhG2ZObd105TGWFQlHEcqO/rPQRL+BP7xY3uFtW/fZiQrkOzQVy477qlA2d9cqxtIn3et7gIyVev9p39+YnbhbW1ikYOKKN6xLeOs+P8iSCAoY9EWC3Tyuv1EhHVjhobKuqSEmRK7/+YlDtSIrZpXPSJKOa6LzmAbbx9TigkGAXdIUAOURS4+F5cRaAvf/XLXUd0jXRUgUY6tgjZ+N5gGw3aJQRdXjuxePvM1a/1697mUTn4/gu3D1u4bd+pfNv5ESn9m7X0HOOdZyPdLWnh6pTqu7zDLmrE20VYxzit6EiFC519XUpOifwx6293SLGfFCtAzJ89stXxb8ZeWzf57Skdo0PEslrl0fMFY17b2XX679fuWp3RUQR6r4w+8+IEi9CnJlOPcj8P7WW5nXnxZrsc8U101qkeH28XYQHPRrWGRgxT5ktw91Wudy7LN113tES2OQ6Vc0mJ9v9gVtfbvz2368unu6aGA0DmnYo+s/86cIYmuyFBkpR+slpGvxqUHOkb4icAggQHM3fQsjqo649BXY1JhupR7u8B7YYkTlscOezxz2xEazvZoXvx9jnhJSHTYBkhYRityP3Lv61L78dFnM2uWvXP3dfGu2+MhCLIqD4JMWGiHzZfLalUHDlfOOmt3ec2TWuX0mixoVqmpUQA55XQD0eVakOVTBPogym1uO6xZUggyNsRgz4N6+1n0JRyfY1qrMactqLAtXDcCxRjGj2p0nogb5i394QXfCKZOxZNrnOsuq1XsWR95qHL7nb9SUsJXbd8xIHVk4b3jFdp9PM+OkTpj8tqqOF2Gw7mldbQRG+IhZwWURICJ3y4TnuoZCi/iOdnSrpX6jyDjSm7jEiARQTwE8N4bz8dtnR8WO+WYvcHxXm7CHUItsUv1X47AAAYWF8QbPB8jGbT0BuI8SvSNx72zMy2TVIwAFy6VbY3o5HDd1ktVW9qHf7vWfq8L7s/GkDgpLEYhitwYtSoDOVLhNjbE2L/eLPN/15u8c4z0QgAj4OM7SqZMyjIzTr0dhECwG8BaQxbckhiWp39iu1ei85AzPv2/H9+uVpvL4WMOTKl9rl39m8+cPdxlunmT2jfq30UAPywuVFeQ1pn0fPZ9Fac5EjfqBAfRsngmkSUvil5ky1RYDwFwu2RIurdxg9FAG+cBKSg6vFH047RDER4UxCSIWJqeXuhJhN11pqxh/hu5+028/b8fpS+CIQlJAm5RdIZyw70n7M140pxE66Y+6C2oFRWr9EBQG5ZnVr76BVw/R7N6vzZmxW3CuhdZxIixC7TIPRW2akGyZBsfjBh0BvLGRMEWVAuMzy8aV8fQds436gAt5ptmoEIAeCdiEE4MwNggr5uqFsisl1KSY1q9tfn+rx+yJQswwb+vvzj6yYN7h579nrpoBe2d5ry5+q/r127W2mj6os5BEEu+Ozga18fvX63CgC4POTU9UdKvp5P48OpUOnPWXFSU6oNj2Pmtc0E2V2nnOeyMBIFkoMiAICiSID4kX9scLB/z9ZBL/STOGJvfly83TpqJEsQ9pt/+9lSahZNWubXXj3kTatATeb8nepBbx+Z1C/uqxc607qPmpCIeHtXPT3r/UNbDt3NyqlavPIkAPB5WEiAj0qjlwRwOLxGzxSKAK55OHNDkOBAQYAfv0ObYAxD5BrD8ctFw7rFA4Bah+fQFXjT40S1nH41qLCinlrXwkl00pQ7K+HFQd8kPo9jsvoG+gm1ekKm1Izp1+GfU7celMnLKuq2vJX64ucXq6vcYWJoHiIEgBVhfUco8iMM9mcFw5T3+qgenGZWT8bLIUnYml548FLpJ7PavzS6pY3Hm8/D/vxsZPd24bVyjUjABQCRkMvjogCQcePBlZwKXIuTJAkIIAg0pDxEAOGgsRF+KJBypYbPw4AkERI5fqUIxwkMQ8/crKSd4CGI1fqEYl8BInX+ai2HJL4rOeyUUxVzJafEsQgQ5nkfpQrNsUt5A7q3KKjSHM+qRBDB1/88sJFO1rk0GxFWcXymxj598P5ffHvFJ1CS3FWwdXLsxBNi+6UsmgVylf7Vny4fvlr+6+s9bJTIRVFk8fROltvbtQr+48AtiYB3t6DmRl6V6dFDOCigSFGFHAA4FYlfyAAAGd1JREFUKCoRctQ6ggCyTqG5fKeie2rE0Sv0AWJCLicxkt5Nl0QQV/SEyyrPOCta7YfgrnpASa1O89CKq9cbsgtqC0plu45fv5wjy60gEQSHCrnbbAvNY05o5KJP5CtRI5i09CEM24q2D1UytW00C/aeL+626MDtIofzrPZsG/njW0M/W9R/59cT3p3TEwAQFEEaB6cYCKK2XqfW4wCQEOkXESwCgENX6NctY8PFPdvQF6JQOmLXZcgM6Y23q8465VRZgtCfgzoBAGBYeW1DbtjM28V6tSqvDP33RHZ2oRZB3J1/rdn0hEb+8m8bo5Mvrzxlt6WQMGwv3PF2+OC1QTSdQzOlsLK+/38O7/5oYI9WjCqoWjJ7XFpcpF/PtCgOB71wo/Tvo3dOXS82mUOjQnwnD245a1RbIZ+TWyzPtVLxe2K/eL6VSHyFij7nf5N5Xpq1uvSgU04lxYRzosfoAQUAhMMtqyezH9S3iRH1696K6yeHq+hth/OhO4dmJkIA+CK0VyXX5+vSo3bHpRyS+KbsSJKubmn4QIbGVe+nVqFbtPrSpdUjm3yGQV0bRul9OkT36RCtNxDFlYp6jT7EXxgW+Mgv7K8TBdbOEBVi1X3MoRVOu6RopT+VHHRKgK+ULxofPeE2LwjR6xGCAJyQ1ZPLf7zeLTUwJUayN6MUk2sRIEnEmAIZBQRIQAgUpatq7GSanwgBYENAh8vCqK9Kj/RR2S/Z83LNpQ6asnlRo4t47qin5wZeGefMLH1cDpoQSf1mCJLcfNzqYL5VDP03qdXjOqeuEubyA34J6ji/5qr9pjYhMKxfyMRCvQ9H02gwTwJcuFZ14VoVPAzgRUjjZsK4BeHwCZ3G1dXr3T8nJIEkgSSBIBDjD04gOI7gOBgMoDeA3gA6vfEH0ekafjTahh+1xvhzkxCPCBs/MmGqAuURgJIESftjtEL3ri8+l7dhUh2jWtNezvvT2s0caisLq1NIv1b+oExBEgRp0Q8kRojbJdCHAsuUegEXbfj/Mv2xcyfvhg0s9Qt79D9tkhxQHO+peoAwWzg1BwGEw3VtZCO4rSf0E/EBAJXaMio0Ybx4GiQ9QiatKD7Zt9puPVfVj/Kdz4ff+E/EkLv8oIVjWraLb3idq3U4bQ1qtQ7X6mn+bSqtgXZ7vcago9uu1Oj1BppnR6nW066nK1QGy4Itxu2fzGo/d0Sy5S6nw8FxTWGl6YnncDEOj8P34YaE+y2d2s7a0L7vi7tU1U6uz3Pn4pcA0LSIfRRF/AL5GBcDgCaXtUARlMfzwQkXTmcQNwx5AYAk4cC5+6VVKn+x898rLasfJGFqEidIuUW8KUESpWWkVAZyJcbH+AatAeXsHTRx1ISuPvxmORR3G4dOFxQUy/p2ib5fLCupUGIYEhsh6ZYW7udr9T+4/2xRvcbJhpk+RTf8xfbNlaRGS6o1AABaLag0pEoNKhWo1Lyo0BqB+DwWXBNrdfjA46AiIU3iYxP+vvxBXWNcZ1VwkwhZWFis0ZzWCVlYnkhYEbKweBhWhCwsHoYVIQuLh2FFyMLiYVgRsrB4GFaELCwehhUhC4uHYUXIwuJhWBGysHiYJ8p/UiqVnjlz5uzZs2q1Ojg4ODU1tV+/foGBgZ6+L68jJyfn2rVrpaWlWq3Wz88vNTW1S5cuQiHTTOcszsXdIly3bt3ly5dlMplAIIiOjh41alSPHj0sm927d++rr74CgICAhqiZ999/XyCgTy4EANeuXfvmm2+2bdtmMDQKKsUwbMSIEUuWLKG9CgBcvHgxPT1dLpcrFAqFQqHVagFAIpEIBAKRSCQSiYYPH96xY0fKUUqlcvPmzUqlUq/XazQarVY7atSoXr1oCgkBgEwm27RpU3l5eV1dnUQi8fX1ff311318fACgtrZ27dq1+fn5CoUiODi4bdu28+bN43K5AHD58uUdO3YUFxer1eqQkJC0tLTx48eHh4fTXqKgoODPP//UarVSqVSr1SYlJb3zzjuWzfR6/fr163/88ce7d6m5A/39/WfMmLFkyZLgYMdi9i9dunTo0KGampra2loAUKlUGIYJhUKJRCISiQQCga+v78iRI1u1alRmw/iupJyKw+H4+jakromNjR02jFr+Ra1W//rrrwqFQi6XK5VKrVb7888/G3fJZLJt27bZuM++ffu2bGm1NO93331XWVkJAHV1dZRwKblcjuP4q6++au3/6wQIN2IwGEQiEWbG8OHDaVsuX74ca8zNmzdpW6pUqsWLF3M4HMw6HA5n/vz51dXVlod//PHHfJsIhcJFixZpNBrzowoLCymXiIiIKC0tpb3DvLw8SuOysjLjrmvXrvmbERwcbDAYjLuWLVsmbEznzp3r6+tpL7Fnzx7zlmPGjLFsc/PmzU6dOnFtEhYWtnfvXtpLWOObb74R2yM8PPzAgQPmR61YsYJjj9GjR1dVVZkfVVZWFmZGREQEjuPGXbdu3eLZRCAQTJs2zdr/KC0tDbHJd99959DX4hBunRMWFBRoNI0Ka508ebK6mlqLlyTJv/76i7IxLy8PLKitre3bt++qVatsB3uSJPnrr7/279+/tNThiisEQfz888/Tpk0z72MtS5FVVlbOmzeP9jb4fGrsD/EwcoXSPjAwEEVRShsT2dnZH374Ie1NqtWN0mNa3saZM2cGDBhw44adGgG1tbXPPPPMxo0bbTdzFKVSOWPGjEuXLpm2mD6mDQ4ePPjUU09RPpo5BEEYRy4AoNPZSU9IEMS2bds6dux48GBTMtZUVVU14SiGuFWEOTk5lC0Gg2HPnj2UjRkZGffvU9O8WopQqVSOHj362jVGGYEB4M6dO0OGDCkra0rmvL17965Zs8b0J209wEOHDv3444+W2y1H0TjeEENMUYtxjEppY86PP/64f/9+y+22RZiXl/fMM8/IZIzCbQmCWLhw4b59+5g0BsalETUazdy5c02aYXhUZmamcVZiDdMHtytCI1KpdNKkSTt37mTS2BzTONkVuFWEllMRANi1axdly59//mnZzFKWy5YtM3+5MiE3N3fBggW220RGRrZt29byKfnqq69MD7e1F/mSJUuysrIoG230hBTML0orQpIkX3rppfLycsp208NteX6CIObOnSuVUktHpKSkLFu2bPr06aGh1OSFOI7PnTuX4ajB8ovq1q2bvz9NadeCggLTAMfyCwwODk5OTsYwahK3devW6fUNgcKWPbxK1VA0ivIN2ECv18+bN8/y32SbiIgIh9o7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';
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { MP_LOGO_B64 };
+  } else {
+    (typeof window !== 'undefined' ? window : globalThis).MP_LOGO_B64 = MP_LOGO_B64;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Port of generatePDF and its helpers (parsePrice, fmtMoney, resolveItemPrice,
+// skuLabel) from app_source.jsx. This is pure jsPDF logic with zero React
+// dependency in the original, so it lifts over verbatim -- same layout,
+// same branding, same copy. Requires window.jspdf (jsPDF UMD build) and
+// MP_LOGO_B64 (see logoData.js) to be loaded first.
+(function (root) {
+  'use strict';
+
+  const parsePrice = (p) => {
+    if (!p || p === 'TBD') return null;
+    const n = parseFloat(String(p).replace(/[$,]/g, ''));
+    return isNaN(n) ? null : n;
+  };
+
+  const fmtMoney = (n) => {
+    if (n == null) return 'TBD';
+    const sign = n < 0 ? '-' : '';
+    return sign + '$' + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  // Pant items from the V4 catalog carry a separate price per materials
+  // grade (priceStd / pricePrm) instead of a single price string. This
+  // resolves the correct one for the currently-selected grade, falling
+  // back to whichever is available if that specific row doesn't have a
+  // price for the active grade. Items without these fields (coat,
+  // suspenders, PFP-native) fall through to the original single price
+  // string unchanged.
+  const resolveItemPrice = (item, grade) => {
+    if (item.priceStd != null || item.pricePrm != null) {
+      if (grade === 'prm') return item.pricePrm != null ? item.pricePrm : item.priceStd;
+      return item.priceStd != null ? item.priceStd : item.pricePrm;
+    }
+    return parsePrice(item.price);
+  };
+
+  // Many cleaned-catalog items share an identical display SKU (a single
+  // "New Kit #" can cover several color/material variants) while the
+  // original "Legacy Kit #" stays unique per row. Appending it in
+  // parentheses whenever it differs from the SKU is what lets someone
+  // tell two otherwise-identical-looking rows apart.
+  const skuLabel = (item) => {
+    const sku = item.sku || '';
+    if (item.legacySku && item.legacySku !== item.sku) {
+      return sku ? sku + ' (' + item.legacySku + ')' : item.legacySku;
+    }
+    return sku;
+  };
+
+  function generatePDF(
+    coatItems, pantItems, pantType, suspItems,
+    coatTotal, pantTotal, suspTotal, grandTotal,
+    quoteInfo, discountPct, coatNotes, pantNotes,
+  ) {
+    const MP_LOGO_B64 = root.MP_LOGO_B64;
+    const { jsPDF } = root.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+    const NAVY = [13, 37, 78], RED = [185, 28, 28], GOLD = [180, 130, 20],
+      WHITE = [255, 255, 255], AMBER = [160, 90, 0];
+    const W = 215.9, H = 279.4, M = 14;
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const companyName = (quoteInfo.company || 'Horizon Turnout Gear').trim();
+    const isHorizon = companyName.toLowerCase() === 'horizon turnout gear';
+
+    function hdr(pg) {
+      doc.setFillColor(...NAVY);
+      doc.rect(0, 0, W, 40, 'F');
+      doc.setFillColor(...RED);
+      doc.rect(0, 40, W, 2.5, 'F');
+      try { doc.addImage(MP_LOGO_B64, 'PNG', M, 5, 30, 30); } catch (e) {}
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(...WHITE);
+      doc.text('TURNOUT GEAR QUOTE', W / 2, 16, { align: 'center' });
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(180, 200, 230);
+      doc.text(companyName + '  |  Morning Pride Authorized Distributor  |  ' + today, W / 2, 24, { align: 'center' });
+      doc.setFontSize(7);
+      doc.text('Page ' + pg, W - M, 24, { align: 'right' });
+    }
+
+    function ftr() {
+      doc.setFillColor(...NAVY);
+      doc.rect(0, H - 20, W, 20, 'F');
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(180, 200, 230);
+      doc.text('ESTIMATE ONLY \u2014 This document is not a final or binding quote. Prices are subject to change based on final specifications,', M, H - 14);
+      doc.text('material availability, and formal order confirmation. Contact your ' + companyName + ' representative for a binding quotation.', M, H - 10);
+      if (isHorizon) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...GOLD);
+        doc.text('Steve Smith | 407-232-4493 | steve@horizonturnout.com', M, H - 5.5);
+        doc.setTextColor(150, 170, 200);
+        doc.setFont('helvetica', 'normal');
+        doc.text('John Grivalsky | 973-703-0888 | john@horizonturnout.com', W / 2 + 10, H - 5.5);
+      } else {
+        const salesLine = [quoteInfo.salesman, quoteInfo.salesmanPhone, quoteInfo.salesmanEmail].filter(Boolean).join(' | ');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...GOLD);
+        doc.text(salesLine || companyName, M, H - 5.5);
+      }
+    }
+
+    function quoteBlock(y) {
+      doc.setFillColor(240, 244, 250);
+      doc.roundedRect(M, y, W - M * 2, 38, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...NAVY);
+      doc.text('QUOTE INFORMATION', M + 4, y + 7);
+      const half = (W - M * 2 - 8) / 2;
+      [
+        ['Dealer / Distributor:', quoteInfo.dealer || ''],
+        ['Salesman:', quoteInfo.salesman || ''],
+        ['Department / Organization:', quoteInfo.department || ''],
+        ['Date:', quoteInfo.date || today],
+      ].forEach(([label, val], idx) => {
+        const col = idx % 2, row = Math.floor(idx / 2), x = M + 4 + col * half, fy = y + 14 + row * 9;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...NAVY);
+        doc.text(label, x, fy);
+        doc.setDrawColor(150, 160, 180);
+        doc.setLineWidth(0.3);
+        doc.line(x, fy + 4, x + half - 6, fy + 4);
+        if (val) {
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(40, 60, 100);
+          doc.text(val, x, fy + 3.2);
+        }
+      });
+      return y + 42;
+    }
+
+    function notesBlock(notes, y) {
+      if (!notes || !notes.trim()) return y;
+      if (y > H - 55) {
+        doc.addPage();
+        hdr(doc.internal.getCurrentPageInfo().pageNumber);
+        ftr();
+        y = 46;
+      }
+      const lines = doc.splitTextToSize(notes, W - M * 2 - 8);
+      const blockH = 10 + lines.length * 5;
+      doc.setFillColor(230, 236, 248);
+      doc.roundedRect(M, y, W - M * 2, blockH, 2, 2, 'F');
+      doc.setDrawColor(...NAVY);
+      doc.setLineWidth(0.4);
+      doc.roundedRect(M, y, W - M * 2, blockH, 2, 2, 'S');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...NAVY);
+      doc.text('CUSTOMIZATION NOTES', M + 4, y + 6);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(30, 50, 90);
+      doc.text(lines, M + 4, y + 12);
+      return y + blockH + 6;
+    }
+
+    function table(items, title, subtotal, startY) {
+      if (!items.length) return startY;
+      let y = startY;
+      if (y > H - 55) {
+        doc.addPage();
+        hdr(doc.internal.getCurrentPageInfo().pageNumber);
+        ftr();
+        y = 46;
+      }
+      doc.setFillColor(...NAVY);
+      doc.roundedRect(M, y, W - M * 2, 8, 1, 1, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...WHITE);
+      doc.text(title, M + 4, y + 5.5);
+      y += 10;
+      doc.setFillColor(...RED);
+      doc.rect(M, y, W - M * 2, 6.5, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...WHITE);
+      const cC = M + 2, cS = M + 30, cD = M + 70, cQ = W - M - 28, cP = W - M - 2;
+      doc.text('CATEGORY', cC, y + 4.5);
+      doc.text('SKU', cS, y + 4.5);
+      doc.text('DESCRIPTION', cD, y + 4.5);
+      doc.text('QTY', cQ, y + 4.5, { align: 'center' });
+      doc.text('PRICE', cP, y + 4.5, { align: 'right' });
+      y += 7;
+      items.forEach((item, idx) => {
+        if (y > H - 42) {
+          doc.addPage();
+          hdr(doc.internal.getCurrentPageInfo().pageNumber);
+          ftr();
+          y = 46;
+        }
+        doc.setFillColor(...(idx % 2 === 0 ? [248, 250, 252] : [255, 255, 255]));
+        doc.rect(M, y, W - M * 2, 5.5, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.5);
+        doc.setTextColor(60, 80, 100);
+        doc.text((item.category || '').substring(0, 18), cC, y + 3.8);
+        doc.setFont('courier', 'normal');
+        doc.setTextColor(30, 60, 120);
+        doc.text(skuLabel(item).substring(0, 26), cS, y + 3.8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(40, 50, 70);
+        doc.text((item.description || item.sku || '').substring(0, 44), cD, y + 3.8);
+        const qty = item.qty ?? 1;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 50, 70);
+        doc.text(String(qty), cQ, y + 3.8, { align: 'center' });
+        const unitPrice = resolveItemPrice(item, item.grade || 'std');
+        const isTBD = unitPrice == null;
+        const extPrice = unitPrice != null ? unitPrice * qty : null;
+        const isGraded = item.priceStd != null && item.pricePrm != null;
+        const gradeTag = isGraded ? (item.grade === 'prm' ? ' (Prm)' : ' (Std)') : '';
+        if (isTBD) {
+          doc.setTextColor(...AMBER);
+          doc.text('TBD' + gradeTag, cP, y + 3.8, { align: 'right' });
+        } else {
+          doc.setTextColor(20, 120, 60);
+          doc.text(fmtMoney(extPrice) + gradeTag, cP, y + 3.8, { align: 'right' });
+        }
+        y += 5.5;
+      });
+      const tbdN = items.filter((i) => resolveItemPrice(i, i.grade || 'std') == null).length;
+      doc.setFillColor(...NAVY);
+      doc.rect(M, y, W - M * 2, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...WHITE);
+      doc.text('SUBTOTAL', cC, y + 5);
+      doc.setTextColor(100, 220, 150);
+      doc.text(fmtMoney(subtotal) + (tbdN > 0 ? ' + ' + tbdN + ' TBD' : ''), cP, y + 5, { align: 'right' });
+      return y + 12;
+    }
+
+    hdr(1);
+    ftr();
+    let y = 46;
+    y = quoteBlock(y);
+    y = table(coatItems, 'COAT OPTIONS \u2014 LTO', coatTotal, y);
+    y = notesBlock(coatNotes, y);
+    doc.addPage();
+    hdr(2);
+    ftr();
+    y = 46;
+    const allPantItems = [...pantItems, ...suspItems], allPantTotal = pantTotal + suspTotal;
+    y = table(allPantItems, 'PANT OPTIONS \u2014 ' + (pantType === 'lto' ? 'LTO' : 'PFP'), allPantTotal, y);
+    y = notesBlock(pantNotes, y);
+
+    if (y > H - 70) {
+      doc.addPage();
+      hdr(doc.internal.getCurrentPageInfo().pageNumber);
+      ftr();
+      y = 46;
+    }
+    y += 4;
+    const allTBD = [...coatItems, ...pantItems, ...suspItems].filter((i) => resolveItemPrice(i, i.grade || 'std') == null);
+    const hasGraded = pantItems.some((it) => it.priceStd != null && it.pricePrm != null);
+    let boxH = 20;
+    if (discountPct > 0) boxH += 10;
+    if (allTBD.length) boxH += 8;
+    if (hasGraded) boxH += 6;
+    boxH += 8;
+    doc.setFillColor(...NAVY);
+    doc.roundedRect(M, y, W - M * 2, boxH, 3, 3, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...GOLD);
+    doc.text('GRAND TOTAL \u2014 FULL SUIT', M + 4, y + 10);
+    doc.setFontSize(18);
+    doc.setTextColor(...WHITE);
+    doc.text(fmtMoney(grandTotal), W - M - 4, y + 10, { align: 'right' });
+    let noteY = y + 18;
+    if (hasGraded) {
+      doc.setFontSize(8);
+      doc.setTextColor(180, 200, 230);
+      doc.setFont('helvetica', 'italic');
+      doc.text('(Std) / (Prm) next to a pant price reflects that item\u2019s selected materials grade.', M + 4, noteY);
+      noteY += 6;
+    }
+    if (discountPct > 0) {
+      const discAmt = grandTotal * (discountPct / 100), discTotal = grandTotal - discAmt;
+      doc.setFontSize(9);
+      doc.setTextColor(180, 200, 230);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Discount: ' + discountPct + '%  (-' + fmtMoney(discAmt) + ')', M + 4, noteY);
+      doc.setFontSize(14);
+      doc.setTextColor(80, 220, 140);
+      doc.setFont('helvetica', 'bold');
+      doc.text(fmtMoney(discTotal), W - M - 4, noteY, { align: 'right' });
+      noteY += 10;
+    }
+    if (allTBD.length) {
+      doc.setFontSize(7.5);
+      doc.setTextColor(...AMBER);
+      doc.setFont('helvetica', 'italic');
+      doc.text('* ' + allTBD.length + ' item(s) with TBD pricing not included above.', M + 4, noteY);
+      noteY += 8;
+    }
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(160, 180, 220);
+    doc.text('This estimate is valid for 30 days pending manufacturer pricing confirmation.', M + 4, noteY);
+    doc.save('Morning_Pride_Quote.pdf');
+  }
+
+  const PdfGenModule = { generatePDF, resolveItemPrice, parsePrice, fmtMoney, skuLabel };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = PdfGenModule;
+  } else {
+    (typeof window !== 'undefined' ? window : globalThis).MPPdfGen = PdfGenModule;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Parses pasted build-spec email text into the (section, text, isHeader)
+// lines the matcher expects. There's no Python equivalent to port --
+// ihb_spec.py was hand-transcribed as a test fixture, and HANDOFF.md
+// explicitly flagged turning that into "a real parser" as outstanding
+// work. This is that parser.
+//
+// Design philosophy: heuristics here don't need to be perfect, because
+// the app's review step lets a human fix section/header assignment before
+// matching runs. Optimize for "usually right, easy to correct" over
+// "complex enough to never be wrong."
+(function (root) {
+  'use strict';
+
+  // A line that IS a section label and nothing else (optionally with a
+  // trailing colon), e.g. "PANTS" or "Coat Options:".
+  const SECTION_LABEL_ONLY_RE = /^\s*(coat options?|turnout coats?|coats?|pant options?|turnout pants?|pants?|trousers?|suspender options?|suspenders?)\s*:?\s*$/i;
+  // A label followed by a REQUIRED colon and more content on the same
+  // line, e.g. "PANTS: MPL 75B2 Gold Pro Fit". The colon is what
+  // distinguishes this from an ordinary spec line that merely starts with
+  // a label word, e.g. "Pants MPL 75B2 Gold Pro Fit" (no colon) -- that
+  // must be left completely intact, not have "Pants" stripped off it.
+  const SECTION_LABEL_PREFIX_RE = /^\s*(coat options?|turnout coats?|coats?|pant options?|turnout pants?|pants?|trousers?|suspender options?|suspenders?)\s*:\s*(.+)$/i;
+
+  const SECTION_HINT = {
+    coat: /\b(coat|jacket)\b/i,
+    pant: /\b(pants?|trousers?)\b/i,
+    suspenders: /\b(suspenders?)\b/i,
+  };
+
+  // Common bullet/numbering prefixes people paste from email clients.
+  const BULLET_RE = /^\s*(?:[-*\u2022\u25CF\u2023]|\(?\d{1,2}[).]|\u2013|\u2014)\s+/;
+
+  function normalizeSectionWord(label) {
+    const low = label.toLowerCase();
+    if (low.startsWith('susp')) return 'suspenders';
+    if (low.startsWith('coat')) return 'coat';
+    return 'pant';
+  }
+
+  function stripBullet(line) {
+    return line.replace(BULLET_RE, '');
+  }
+
+  function parseSpecText(rawText) {
+    const rawLines = (rawText || '').split(/\r?\n/);
+    const lines = [];
+    let currentSection = null;
+    let sectionStarted = false; // have we emitted a header line for currentSection yet?
+
+    for (let raw of rawLines) {
+      let trimmed = stripBullet(raw.trim()).trim();
+      if (!trimmed) continue;
+
+      const labelOnlyMatch = SECTION_LABEL_ONLY_RE.exec(trimmed);
+      if (labelOnlyMatch) {
+        currentSection = normalizeSectionWord(labelOnlyMatch[1]);
+        sectionStarted = false;
+        continue; // pure label line, nothing else to process
+      }
+      const labelPrefixMatch = SECTION_LABEL_PREFIX_RE.exec(trimmed);
+      if (labelPrefixMatch) {
+        currentSection = normalizeSectionWord(labelPrefixMatch[1]);
+        sectionStarted = false;
+        trimmed = labelPrefixMatch[2].trim(); // label + content on one line, e.g. "PANTS: MPL 75B2 Gold"
+      }
+
+      // Re-evaluate section on every line, not just when unset -- many
+      // real pasted emails have no explicit section labels at all (see
+      // the original IHB spec this was modeled on). Coat/pant/suspender
+      // vocabulary is disjoint enough in practice that a keyword hit for
+      // a *different* section than the current one is a reliable signal
+      // of a real transition, and becomes that new section's header line.
+      let detectedSection = null;
+      if (SECTION_HINT.suspenders.test(trimmed)) detectedSection = 'suspenders';
+      else if (SECTION_HINT.pant.test(trimmed)) detectedSection = 'pant';
+      else if (SECTION_HINT.coat.test(trimmed)) detectedSection = 'coat';
+
+      if (!currentSection) {
+        currentSection = detectedSection || 'coat'; // coat is always first in practice
+        sectionStarted = false;
+      } else if (detectedSection && detectedSection !== currentSection) {
+        currentSection = detectedSection;
+        sectionStarted = false;
+      }
+
+      const isHeader = !sectionStarted;
+      sectionStarted = true;
+      lines.push({ section: currentSection, text: trimmed, isHeader });
+    }
+    return lines;
+  }
+
+  const SpecParserModule = { parseSpecText, normalizeSectionWord };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = SpecParserModule;
+  } else {
+    (typeof window !== 'undefined' ? window : globalThis).MPSpecParser = SpecParserModule;
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  'use strict';
+
+  const CATALOG_URL = 'https://raw.githubusercontent.com/SteveHTG/MP_GEAR_BUILDER/main/catalog.js';
+  const CROSSREF_URL = 'https://raw.githubusercontent.com/SteveHTG/MP_GEAR_BUILDER/main/cross_reference.json';
+
+  let catIdx, techIdx, matcher;
+  let parsedLines = [];   // [{section, text, isHeader}]
+  let rows = [];          // parallel UI state per parsedLines entry, built in runMatcher()
+  let pantType = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function setStatus(msg, isError) {
+    const el = $('statusBar');
+    el.textContent = msg;
+    el.className = 'status' + (isError ? ' status-error' : '');
+  }
+
+  function showStage(name) {
+    ['stage-paste', 'stage-review', 'stage-match'].forEach((id) => {
+      $(id).style.display = id === 'stage-' + name ? '' : 'none';
+    });
+    $('quotePanel').style.display = name === 'match' ? '' : 'none';
+  }
+
+  async function init() {
+    setStatus('Loading current catalog from GitHub\u2026');
+    try {
+      const [catalogText, crossRefText] = await Promise.all([
+        fetch(CATALOG_URL).then((r) => { if (!r.ok) throw new Error('catalog.js fetch failed: ' + r.status); return r.text(); }),
+        fetch(CROSSREF_URL).then((r) => { if (!r.ok) throw new Error('cross_reference.json fetch failed: ' + r.status); return r.text(); }),
+      ]);
+      const catalog = JSON.parse(catalogText.trim().replace(/^window\.CATALOG\s*=\s*/, '').replace(/;\s*$/, ''));
+      const crossRef = JSON.parse(crossRefText);
+      catIdx = new window.MPCatalogIndex.CatalogIndex(catalog);
+      techIdx = new window.MPTechPackIndex.TechPackIndex(crossRef);
+      matcher = new window.MPMatcher.SpecMatcher(catIdx, techIdx);
+      setStatus('Catalog loaded \u2014 ready.');
+      showStage('paste');
+    } catch (e) {
+      setStatus('Could not load the catalog (' + e.message + '). Check your internet connection and reload.', true);
+    }
+  }
+
+  // ─── Stage 1: paste ──────────────────────────────────────────────────
+  function onParseSpec() {
+    const text = $('specInput').value;
+    if (!text.trim()) { setStatus('Paste a build spec first.', true); return; }
+    parsedLines = window.MPSpecParser.parseSpecText(text);
+    if (!parsedLines.length) { setStatus('Nothing recognizable in that text.', true); return; }
+    renderReviewTable();
+    showStage('review');
+  }
+
+  // ─── Stage 2: review section/header tags ────────────────────────────
+  function renderReviewTable() {
+    const tbody = $('reviewBody');
+    tbody.innerHTML = '';
+    parsedLines.forEach((line, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="col-num">' + (i + 1) + '</td>' +
+        '<td class="col-text">' + escapeHtml(line.text) + '</td>' +
+        '<td class="col-section"><select data-i="' + i + '" class="sectionSelect">' +
+        ['coat', 'pant', 'suspenders'].map((s) =>
+          '<option value="' + s + '"' + (s === line.section ? ' selected' : '') + '>' + s + '</option>').join('') +
+        '</select></td>' +
+        '<td class="col-header"><input type="checkbox" data-i="' + i + '" class="headerCheck"' + (line.isHeader ? ' checked' : '') + '></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function syncReviewEditsFromDom() {
+    document.querySelectorAll('.sectionSelect').forEach((sel) => {
+      parsedLines[+sel.dataset.i].section = sel.value;
+    });
+    document.querySelectorAll('.headerCheck').forEach((cb) => {
+      parsedLines[+cb.dataset.i].isHeader = cb.checked;
+    });
+  }
+
+  // ─── Stage 3: run matcher, review matches ───────────────────────────
+  function onRunMatcher() {
+    syncReviewEditsFromDom();
+    pantType = null;
+    rows = [];
+    for (const line of parsedLines) {
+      let catalogSection;
+      if (line.section === 'coat') {
+        catalogSection = 'coat';
+      } else if (line.section === 'pant') {
+        if (pantType === null) pantType = /MPL|PFP|PRO FIT/i.test(line.text) ? 'pfp' : 'lto';
+        catalogSection = pantType;
+      } else {
+        catalogSection = 'suspenders';
+      }
+      const res = matcher.matchLine(line.section, catalogSection, line.text, line.isHeader);
+      rows.push({
+        line: line.text,
+        section: line.section,
+        catalogSection,
+        status: res.status,
+        matches: res.matches,
+        reasoning: res.reasoning,
+        chosenIdx: res.matches.length ? 0 : -1,
+        qty: 1,
+        grade: 'std',
+        toNotes: res.status === 'NOTE',
+      });
+    }
+    renderMatchTable();
+    showStage('match');
+  }
+
+  const STATUS_CLASS = { LITERAL: 'badge-high', CROSSWALK: 'badge-high', FUZZY: 'badge-med', NOTE: 'badge-note' };
+
+  function renderMatchTable() {
+    const tbody = $('matchBody');
+    tbody.innerHTML = '';
+    rows.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      const matchOptions = row.matches.map((m, mi) =>
+        '<option value="' + mi + '"' + (mi === row.chosenIdx ? ' selected' : '') + '>' +
+        escapeHtml(m.sku) + ' \u2014 ' + escapeHtml((m.description || '').slice(0, 40)) + ' (' + m.confidence + ')' +
+        '</option>').join('');
+
+      const chosen = row.chosenIdx >= 0 ? row.matches[row.chosenIdx] : null;
+      const fullItem = chosen ? (catIdx.exactSku(chosen.sku, chosen.section)[0] || {}).item : null;
+      const isGraded = fullItem && fullItem.priceStd != null && fullItem.pricePrm != null;
+
+      tr.innerHTML =
+        '<td class="col-num">' + (i + 1) + '</td>' +
+        '<td class="col-badge"><span class="badge ' + (STATUS_CLASS[row.status] || '') + '">' + row.status + '</span></td>' +
+        '<td class="col-text">' + escapeHtml(row.line) +
+        (row.reasoning ? '<div class="reasoning">' + escapeHtml(row.reasoning) + '</div>' : '') + '</td>' +
+        '<td class="col-match">' +
+        (row.matches.length
+          ? '<select data-i="' + i + '" class="matchSelect">' + matchOptions + '</select>'
+          : '<span class="no-match">no candidate</span>') + '</td>' +
+        '<td class="col-qty"><input type="number" min="1" value="' + row.qty + '" data-i="' + i + '" class="qtyInput"' +
+        (row.matches.length ? '' : ' disabled') + '></td>' +
+        '<td class="col-grade">' +
+        (isGraded
+          ? '<select data-i="' + i + '" class="gradeSelect"><option value="std"' + (row.grade === 'std' ? ' selected' : '') + '>Std</option><option value="prm"' + (row.grade === 'prm' ? ' selected' : '') + '>Prm</option></select>'
+          : '') + '</td>' +
+        '<td class="col-notes"><input type="checkbox" data-i="' + i + '" class="notesCheck"' + (row.toNotes ? ' checked' : '') + '></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function syncMatchEditsFromDom() {
+    document.querySelectorAll('.matchSelect').forEach((sel) => { rows[+sel.dataset.i].chosenIdx = +sel.value; });
+    document.querySelectorAll('.qtyInput').forEach((inp) => { rows[+inp.dataset.i].qty = Math.max(1, parseInt(inp.value, 10) || 1); });
+    document.querySelectorAll('.gradeSelect').forEach((sel) => { rows[+sel.dataset.i].grade = sel.value; });
+    document.querySelectorAll('.notesCheck').forEach((cb) => { rows[+cb.dataset.i].toNotes = cb.checked; });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ─── Build final item lists + generate PDF ──────────────────────────
+  function buildFinalItems() {
+    const coatItems = [], pantItems = [], suspItems = [];
+    const coatNotesLines = [], pantNotesLines = [];
+
+    rows.forEach((row) => {
+      if (row.toNotes || row.chosenIdx < 0) {
+        const bucket = row.section === 'coat' ? coatNotesLines : pantNotesLines; // suspender notes fold into pant notes block (PDF has no 3rd notes slot)
+        bucket.push('\u2022 ' + row.line);
+        return;
+      }
+      const match = row.matches[row.chosenIdx];
+      const hits = catIdx.exactSku(match.sku, match.section);
+      const fullItem = hits.length ? hits[0].item : match; // fall back to the flattened match if the full item can't be re-found
+      const item = Object.assign({}, fullItem, { qty: row.qty, grade: row.grade });
+      if (row.section === 'coat') coatItems.push(item);
+      else if (row.section === 'pant') pantItems.push(item);
+      else suspItems.push(item);
+    });
+
+    return {
+      coatItems, pantItems, suspItems,
+      coatNotes: coatNotesLines.join('\n'),
+      pantNotes: pantNotesLines.join('\n'),
+    };
+  }
+
+  function sumPrice(items) {
+    return items.reduce((s, it) => s + (window.MPPdfGen.resolveItemPrice(it, it.grade || 'std') ?? 0) * (it.qty ?? 1), 0);
+  }
+
+  function onGeneratePdf() {
+    syncMatchEditsFromDom();
+    const { coatItems, pantItems, suspItems, coatNotes, pantNotes } = buildFinalItems();
+    const coatTotal = sumPrice(coatItems);
+    const pantTotal = sumPrice(pantItems);
+    const suspTotal = sumPrice(suspItems);
+    const grandTotal = coatTotal + pantTotal + suspTotal;
+    const quoteInfo = {
+      dealer: $('companyInput').value || 'Horizon Turnout Gear',
+      company: $('companyInput').value || 'Horizon Turnout Gear',
+      salesman: $('salesmanInput').value,
+      salesmanPhone: $('salesmanPhoneInput').value,
+      salesmanEmail: $('salesmanEmailInput').value,
+      department: $('deptInput').value,
+      date: $('dateInput').value,
+    };
+    const discountPct = parseFloat($('discountInput').value) || 0;
+    window.MPPdfGen.generatePDF(coatItems, pantItems, pantType || 'lto', suspItems,
+      coatTotal, pantTotal, suspTotal, grandTotal, quoteInfo, discountPct, coatNotes, pantNotes);
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    $('parseSpecBtn').addEventListener('click', onParseSpec);
+    $('backToPasteBtn').addEventListener('click', () => showStage('paste'));
+    $('runMatcherBtn').addEventListener('click', onRunMatcher);
+    $('backToReviewBtn').addEventListener('click', () => { syncMatchEditsFromDom(); showStage('review'); });
+    $('generatePdfBtn').addEventListener('click', onGeneratePdf);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    }
+    init();
+  });
+})();
+
+</script>
+</body>
+</html>

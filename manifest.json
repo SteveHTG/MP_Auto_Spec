@@ -1,0 +1,12 @@
+{
+  "name": "MP Spec Matcher",
+  "short_name": "Spec Matcher",
+  "description": "Paste a Morning Pride build spec, get matched SKUs and a quote PDF.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0D254E",
+  "theme_color": "#0D254E",
+  "orientation": "portrait-primary",
+  "icons": []
+}
