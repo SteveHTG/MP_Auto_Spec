@@ -134,6 +134,8 @@
     width: 100%; font-size: 12px; padding: 4px 6px;
     border: 1px solid var(--border); border-radius: 4px;
   }
+  .search-wrap input.is-suggestion { color: #8A6200; font-style: italic; border-color: var(--gold); }
+  .suggestion-hint { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
   .search-results {
     position: absolute; z-index: 20; top: 100%; left: 0; right: 0;
     max-height: 220px; overflow-y: auto; margin: 0; padding: 0;
@@ -937,6 +939,61 @@
       return null;
     }
 
+    // Confirmed by Steve via lettering.csv: lettering SKUs are sold as one
+    // discrete code per exact letter count (e.g. LT2S04-SL = "4-2" sewn
+    // letters", a single line covering all 4 letters), not "qty N of a
+    // single-letter SKU". A spec line that spells out the literal text in
+    // angle brackets -- '2" scotchlite letters <56>', 'back patch 3"
+    // lettering <IHBFD>' -- encodes the letter count as the number of
+    // characters inside the brackets. Color doesn't move the price (every
+    // color is identical at a given size+count in the live catalog), so a
+    // missing color is a safe default, not a guess that risks the total.
+    resolveLettering(text, catalogSection) {
+      const m = /(\d)\s*(?:["\u201d]|in(?:ch(?:es)?)?\.?)?\s*[^<]{0,40}?letter(?:ing|s)?\b[^<]*<\s*([^<>]+?)\s*>/i.exec(text);
+      if (!m) return null;
+      const size = m[1];
+      if (size !== '2' && size !== '3') return null;
+      const raw = m[2];
+      const count = (raw.match(/[A-Za-z0-9]/g) || []).length;
+      if (count < 1) return null;
+      const cc = String(count).padStart(2, '0');
+
+      const low = text.toLowerCase();
+      const COLOR_WORDS = [['silver', 'SS'], ['lime', 'SL'], ['orange', 'SO'], ['brilliance', 'RSL'], ['reflexite', 'RSL']];
+      let requested = null;
+      for (const [word, code] of COLOR_WORDS) {
+        if (low.includes(word)) { requested = code; break; }
+      }
+      const colorOrder = [...new Set([requested, 'SS', 'SL', 'SO', 'RSL'].filter(Boolean))];
+
+      const skuCandidates = (color) => {
+        if (color === 'RSL') {
+          const list = [`LT${size}${cc}-RSL`];
+          if (count === 1) list.push(`LTS${size}${cc}-RSL`);
+          return list;
+        }
+        const list = [`LT${size}S${cc}-${color}`];
+        if (count === 1) list.push(`LTS${size}${cc}-${color}`);
+        return list;
+      };
+
+      const pools = catalogSection === 'coat' ? ['coat'] : [catalogSection, 'coat'];
+      for (const sec of pools) {
+        for (const color of colorOrder) {
+          for (const sku of skuCandidates(color)) {
+            const hits = this.cat.exactSku(sku, sec);
+            if (hits.length) {
+              const colorNote = requested ? `'${color}' as stated` : `no color stated -- defaulted to ${color} (price is the same across colors)`;
+              return ['MATCH', hits[0].item, sec,
+                `${count}-letter ${size}" lettering decoded from '<${raw}>' -- ${colorNote}`];
+            }
+          }
+        }
+      }
+      return ['NOTE', null, null,
+        `Decoded '<${raw}>' as ${count} letters at ${size}", but the catalog has no SKU for that exact count -- needs a manual pick.`];
+    }
+
     resolveClosure(text, catalogSection, fallbackSec) {
       const m = /\bJP?1?(?:0[7-9]|1[0-4])\b/i.exec(text);
       if (!m) return null;
@@ -981,7 +1038,11 @@
         if (matches.length) {
           return MatchResult(text, section, 'LITERAL', matches, 'Header line establishes base outershell color/material.');
         }
-        return MatchResult(text, section, 'NOTE', [], 'Header line did not resolve to a known outershell suffix code.');
+        // Doesn't resolve as an outershell-color header -- could be a
+        // section with no outershell concept (Suspenders/Accessories), or
+        // a header mis-flagged by the parser. Either way, don't give up:
+        // fall through to the same literal/crosswalk/fuzzy pipeline every
+        // other line gets, rather than hard-routing to NOTE.
       }
 
       const lowText = text.toLowerCase();
@@ -990,6 +1051,20 @@
       }
 
       const fallbackSec = this._fallbackSection(section, catalogSection);
+
+      const letteringHit = this.resolveLettering(text, catalogSection);
+      if (letteringHit) {
+        const kind = letteringHit[0];
+        if (kind === 'NOTE') {
+          const [, , , why] = letteringHit;
+          return MatchResult(text, section, 'NOTE', [], why);
+        } else {
+          const [, item, sec, why] = letteringHit;
+          return MatchResult(text, section, 'CROSSWALK',
+            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            'resolved via bracket-lettering count decode');
+        }
+      }
 
       const closureHit = this.resolveClosure(text, catalogSection, fallbackSec);
       if (closureHit) {
@@ -1819,16 +1894,19 @@
         ? '<span class="match-text">' + escapeHtml(m.sku) + ' \u2014 ' + escapeHtml((m.description || '').slice(0, 50)) + '</span>'
         : '<span class="no-match">no candidate</span>';
     }
-    const suggestion = row.matches.length ? row.matches[0] : null;
-    const placeholder = suggestion
-      ? suggestion.sku + ' \u2014 ' + (suggestion.description || '').slice(0, 40) + '?'
-      : 'Type SKU or description\u2026';
-    const displayVal = row.searchedItem
-      ? row.searchedItem.item.sku + ' \u2014 ' + (row.searchedItem.item.description || '')
-      : '';
+    const suggestion = row.matches.length ? row.matches[row.chosenIdx >= 0 ? row.chosenIdx : 0] : null;
+    const resolvedItem = row.searchedItem ? row.searchedItem.item : null;
+    const displayVal = resolvedItem
+      ? resolvedItem.sku + ' \u2014 ' + (resolvedItem.description || '')
+      : suggestion
+        ? suggestion.sku + ' \u2014 ' + (suggestion.description || '')
+        : '';
+    const isSuggestionOnly = !resolvedItem && !!suggestion;
+    const placeholder = suggestion ? 'Search to pick something else\u2026' : 'No suggestion \u2014 type a SKU or description to search\u2026';
     return '<div class="search-wrap">' +
-      '<input type="text" class="searchInput" data-i="' + i + '" autocomplete="off" ' +
+      '<input type="text" class="searchInput' + (isSuggestionOnly ? ' is-suggestion' : '') + '" data-i="' + i + '" autocomplete="off" ' +
       'placeholder="' + escapeHtml(placeholder) + '" value="' + escapeHtml(displayVal) + '">' +
+      (isSuggestionOnly ? '<div class="suggestion-hint">matcher\u2019s best guess \u2014 confirm or search for something else</div>' : '') +
       '<ul class="search-results" data-i="' + i + '"></ul>' +
       '</div>';
   }
@@ -1931,6 +2009,11 @@
     }
   }
 
+  function refreshMatchCell(i) {
+    const td = document.querySelectorAll('#matchBody tr')[i] && document.querySelectorAll('#matchBody tr')[i].querySelector('.col-match');
+    if (td) td.innerHTML = matchCellHtml(rows[i], i);
+  }
+
   function onMatchBodyMousedown(e) {
     const li = e.target.closest('li[data-sku]');
     if (!li) return;
@@ -1941,21 +2024,24 @@
     rows[i].searchedItem = picked;
     rows[i].chosenIdx = -1;
     rows[i].confirmed = true;
-    const inp = document.querySelector('.searchInput[data-i="' + i + '"]');
-    if (inp) inp.value = picked.item.sku + ' \u2014 ' + (picked.item.description || '');
+    ul.style.display = 'none';
+    refreshMatchCell(i);
     const cb = document.querySelector('.confirmCheck[data-i="' + i + '"]');
     if (cb) cb.checked = true;
-    ul.style.display = 'none';
     refreshRowDerived(i);
     refreshRowPendingClass(i);
   }
 
   function onMatchBodyFocusOut(e) {
     if (!e.target.classList.contains('searchInput')) return;
-    const i = e.target.dataset.i;
+    const i = +e.target.dataset.i;
     setTimeout(() => {
       const ul = document.querySelector('.search-results[data-i="' + i + '"]');
       if (ul) ul.style.display = 'none';
+      // Snap the box back to whatever is actually resolved if the user
+      // typed something but never picked a result from the list -- the
+      // displayed text should never disagree with what's really priced.
+      refreshMatchCell(i);
     }, 150);
   }
 
