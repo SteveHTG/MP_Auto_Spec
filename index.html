@@ -124,6 +124,7 @@
   .col-grade select { width: 60px; font-size: 12px; padding: 3px; }
   .col-price { width: 100px; white-space: nowrap; }
   .reasoning { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+  .item-note { font-size: 11px; color: #8a6d1a; margin-top: 3px; font-style: italic; }
   .no-match { color: var(--text-dim); font-size: 12px; font-style: italic; }
   .match-text { font-size: 12px; }
   .price-total { font-weight: 600; }
@@ -250,8 +251,7 @@
 <footer>MP Spec Matcher &mdash; estimate tool only, not a binding quote.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script>
-// Port of catalog_index.py. See that file's docstring/comments for the
+<script>// Port of catalog_index.py. See that file's docstring/comments for the
 // full rationale behind each piece -- this is a line-for-line port, not a
 // re-derivation, except where noted (variant_code / OUTERSHELL_CATEGORIES,
 // added during validation against the real production catalog -- see
@@ -479,10 +479,8 @@
     root.MPCatalogIndex = CatalogIndexModule;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
-<script>
-// Direct port of closures_pant.py's data tables. See that file's module
+<script>// Direct port of closures_pant.py's data tables. See that file's module
 // docstring for the full J110 anomaly writeup -- not reproduced here to
 // avoid drift between two copies of the same explanation; treat
 // closures_pant.py as the source of truth for the reasoning, this file
@@ -543,10 +541,8 @@
     (typeof window !== 'undefined' ? window : globalThis).MPClosuresPant = ClosuresPantModule;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
-<script>
-// Port of techpack_index.py's lookup behavior, adapted to a different
+<script>// Port of techpack_index.py's lookup behavior, adapted to a different
 // data source. The original loaded extracted_kits_lto_profit_v2.csv (Old
 // Kit #/New Kit #/TP# Code -> rich row with Description). That CSV wasn't
 // available for this port. Steve's live app fetches a flat code -> code
@@ -617,10 +613,8 @@
     (typeof window !== 'undefined' ? window : globalThis).MPTechPackIndex = TechPackIndexModule;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
-<script>
-// Port of matcher.py. Mirrors its structure and comments closely so the
+<script>// Port of matcher.py. Mirrors its structure and comments closely so the
 // two stay easy to diff against each other if the Python side gets
 // updated again. See matcher.py's own docstrings for the rationale behind
 // each rule -- not all of it is repeated here.
@@ -656,8 +650,54 @@
   // wrong SKU.
   const FORCED_NOTE_PHRASES = ['place liner label vertically'];
 
-  function MatchResult(line, section, status, matches, reasoning) {
-    return { line, section, status, matches: matches || [], reasoning: reasoning || '' };
+  // Composite-code decode (confirmed against The_2026_Composites.xlsx,
+  // "1970 Composites" tab): a header's "1970 Composite Code" is Outer
+  // Shell number + Thermal Barrier letter + Moisture Barrier code,
+  // concatenated with no separator -- e.g. "75B2" = OS 75 (Pioneer) + TL
+  // 'B' (Glide Ice 2-Layer) + MB '2' (GORE-TEX CROSSTECH Prime). Color is
+  // a separate, always-explicit word elsewhere in the header; the
+  // composite code itself carries no color information.
+  const COMPOSITE_CODE_RE = /\b(\d{2})([A-Z])([A-Z0-9])\b/;
+  const THERMAL_BARRIER_NAMES = {
+    '2': 'Q8', 'A': 'Defender M SL2', 'B': 'Glide Ice 2-Layer', 'H': 'Glide Ice with PBI G2',
+    'I': 'MPG S000108001 CoreCXP 2L', 'J': 'MPG S000108004 Equinox 2L', 'K': 'MPG S000108003 Equinox 3L',
+    'P': 'Glide Ice with Nomex\u00ae Nano', 'Q': 'Caldura SL2', 'T': 'Titanium SL2',
+    'U': 'Titanium with Nomex\u00ae Nano', 'V': 'Glide Ice Pure', 'W': 'Defender M SL2', 'Z': 'Quantum 3D SL2',
+  };
+  const MOISTURE_BARRIER_NAMES = {
+    '2': 'GORE-TEX CROSSTECH\u00ae Prime Moisture Barrier', '3': 'GORE-TEX CROSSTECH\u00ae Black Moisture Barrier',
+    '4': 'GORE-TEX CROSSTECH\u00ae Innovate Moisture Barrier', '7': 'GORE-TEX CROSSTECH\u00ae Endure Moisture Barrier',
+    'A': 'MPG S000108100 Milliken Assure\u2122', 'D': 'Stedair 3000', 'G': 'Stedair 4000', 'N': 'Stedair Gold',
+  };
+  // Thermal Liner / Moisture Barrier SKUs are direct concatenation of a
+  // garment-specific prefix + the composite-code letter (confirmed live
+  // in catalog.js: LTOTTLB, MPLPTLB, LTOTMB3, MPLPMB3, etc.). Pro Fit and
+  // plain LTO pants share the same rows (confirmed: "All LTO pant options
+  // are available for the PFP").
+  const COMPOSITE_PREFIX = {
+    coat: { tl: 'LTOTTL', mb: 'LTOTMB' },
+    pfp: { tl: 'MPLPTL', mb: 'MPLPMB' },
+    lto: { tl: 'MPLPTL', mb: 'MPLPMB' },
+  };
+
+  // Confirmed data-quality issue in the live catalog (~26% of LTO pant
+  // rows, ~33% of PFP pant rows): the description field sometimes holds
+  // a stray price-like string instead of real text (e.g. "OPBEQC" shows
+  // description "\93.88"). Price is usually still correct on these rows
+  // -- only the description text got corrupted -- so this prefers a
+  // clean-description hit when one exists for the same code, rather than
+  // silently dropping the item or showing garbled text when an
+  // unaffected duplicate is available. If literally every hit for a code
+  // is junk, falls back to the raw hits rather than pretending nothing
+  // was found.
+  const JUNK_DESC_RE = /^\\*\$?\d+(\.\d+)?$/;
+  function cleanHits(hits) {
+    const good = hits.filter(({ item }) => !JUNK_DESC_RE.test(String(item.description || '').trim()));
+    return good.length ? good : hits;
+  }
+
+  function MatchResult(line, section, status, matches, reasoning, subResults) {
+    return { line, section, status, matches: matches || [], reasoning: reasoning || '', subResults: subResults || null };
   }
 
   function extractCodes(text, stemVocab) {
@@ -708,9 +748,62 @@
       this.cat = catIdx;
       this.tech = techIdx;
       this.resolvedOsSuffix = {}; // section -> suffix3, e.g. coat -> '75D'
+      this.compositeByGarment = {}; // catalogSection -> {os, tl, mb}, from a header composite code
+    }
+
+    decodeCompositeToken(text) {
+      const m = COMPOSITE_CODE_RE.exec(text.toUpperCase());
+      if (!m) return null;
+      return { os: m[1], tl: m[2], mb: m[3] };
+    }
+
+    // Resolves this build's Thermal Liner / Moisture Barrier choice for a
+    // garment, decoded from a "75B2"-style composite code on either
+    // header. Confirmed policy: the same choice applies to both coat and
+    // pants once stated anywhere, unless that section's own header states
+    // a different one. Returns [] if no composite code appeared anywhere
+    // in this build, so older specs without one are untouched.
+    getCompositeLines(uiSection, catalogSection) {
+      let composite = this.compositeByGarment[catalogSection];
+      if (!composite) {
+        const others = Object.keys(this.compositeByGarment)
+          .filter((k) => k !== catalogSection)
+          .map((k) => this.compositeByGarment[k]);
+        const distinct = [...new Set(others.map((c) => c.tl + c.mb))];
+        if (distinct.length === 1) composite = others[0];
+      }
+      if (!composite) return [];
+
+      const fam = COMPOSITE_PREFIX[catalogSection] || COMPOSITE_PREFIX.pfp;
+      const pieces = [
+        { code: composite.tl, prefix: fam.tl, label: 'Thermal Liner', names: THERMAL_BARRIER_NAMES },
+        { code: composite.mb, prefix: fam.mb, label: 'Moisture Barrier', names: MOISTURE_BARRIER_NAMES },
+      ];
+      const tag = composite.os + composite.tl + composite.mb;
+
+      return pieces.map((p) => {
+        const sku = p.prefix + p.code;
+        const name = p.names[p.code] || `code '${p.code}'`;
+        const hits = this.cat.exactSku(sku, catalogSection);
+        if (hits.length) {
+          const { item } = hits[0];
+          return MatchResult(`[Composite ${tag}] ${p.label} \u2014 ${name}`, uiSection, 'CROSSWALK',
+            [{ sku: item.sku, section: catalogSection, category: item.category, description: item.description, price: item.price, confidence: 'high',
+              reason: `Composite code ${tag} -> ${p.label} code '${p.code}' (${name})` }],
+            `Decoded from composite code ${tag} on the build header.`);
+        }
+        return MatchResult(`[Composite ${tag}] ${p.label} \u2014 ${name}`, uiSection, 'CROSSWALK',
+          [{ sku, section: catalogSection, category: p.label, description: name, price: null, confidence: 'none',
+            reason: `Composite code ${tag} -> ${p.label} code '${p.code}' (${name}), but no catalog row exists yet for ${sku} -- new product, price TBD.` }],
+          `Decoded from composite code ${tag}; not yet priced in the catalog.`);
+      });
     }
 
     resolveHeader(section, catalogSection, text) {
+      const composite = this.decodeCompositeToken(text);
+      if (composite && !this.compositeByGarment[catalogSection]) {
+        this.compositeByGarment[catalogSection] = composite;
+      }
       const [colorWord, colorCode] = detectColor(text);
       const weight = weightMatch(text);
       const candidates = [];
@@ -949,11 +1042,35 @@
     // color is identical at a given size+count in the live catalog), so a
     // missing color is a safe default, not a guess that risks the total.
     resolveLettering(text, catalogSection) {
-      const m = /(\d)\s*(?:["\u201d]|in(?:ch(?:es)?)?\.?)?\s*[^<]{0,40}?letter(?:ing|s)?\b[^<]*<\s*([^<>]+?)\s*>/i.exec(text);
-      if (!m) return null;
-      const size = m[1];
-      if (size !== '2' && size !== '3') return null;
-      const raw = m[2];
+      const LETTERING_PREFIX_RE = /^\s*lettering\s*:\s*/i;
+      const prefixed = LETTERING_PREFIX_RE.test(text);
+
+      let size, raw;
+      if (prefixed) {
+        // Explicit prefix -- a reliable, deliberate signal from the spec
+        // writer, so word order doesn't matter here the way it does for
+        // organic phrasing below: find a 2"/3" size and a bracket
+        // anywhere in the remainder, in any order.
+        const rest = text.replace(LETTERING_PREFIX_RE, '');
+        const bm = /<\s*([^<>]+?)\s*>/.exec(rest);
+        if (!bm) {
+          return ['NOTE', null, null,
+            "Explicit 'Lettering:' line with no bracketed text -- letter count not yet specified (e.g. \"to be specified at order\"); can't price until the exact letters are provided."];
+        }
+        const sm = /([23])\s*(?:["\u201d]|in(?:ch(?:es)?)?\.?)?/.exec(rest);
+        if (!sm) {
+          return ['NOTE', null, null,
+            "Explicit 'Lettering:' line has bracketed text but no 2\" or 3\" size stated -- can't price without knowing the size."];
+        }
+        size = sm[1];
+        raw = bm[1];
+      } else {
+        const m = /(\d)\s*(?:["\u201d]|in(?:ch(?:es)?)?\.?)?\s*[^<]{0,40}?letter(?:ing|s)?\b[^<]*<\s*([^<>]+?)\s*>/i.exec(text);
+        if (!m) return null;
+        size = m[1];
+        if (size !== '2' && size !== '3') return null;
+        raw = m[2];
+      }
       const count = (raw.match(/[A-Za-z0-9]/g) || []).length;
       if (count < 1) return null;
       const cc = String(count).padStart(2, '0');
@@ -1097,6 +1214,42 @@
       }
 
       const codes = extractCodes(text, this.cat.stemVocab);
+
+      // Multi-item safety net: if 2+ distinct codes in this single line
+      // each resolve to exactly one unambiguous literal catalog SKU,
+      // treat this as multiple separate items chained in one line
+      // (confirmed real pattern -- e.g. "OPBEQO-KV ... OPBEQC BL4VSP5
+      // ... OPBL02XL BL2XSP6 ...") rather than collapsing them into one
+      // row's candidate list, which would otherwise look like a single
+      // ambiguous item with several alternative picks. Deliberately
+      // restricted to clean, literal, single-hit exact matches only --
+      // not extended to fuzzy/prefix/crosswalk hits -- to keep the false-
+      // positive risk low.
+      const anchors = [];
+      const seenSkus = new Set();
+      for (const code of codes) {
+        let hits = cleanHits(this.cat.exactSku(code, catalogSection));
+        let usedSec = catalogSection;
+        if (!hits.length && fallbackSec) { hits = cleanHits(this.cat.exactSku(code, fallbackSec)); usedSec = hits.length ? fallbackSec : catalogSection; }
+        if (!hits.length) hits = cleanHits(this.cat.exactSku(code));
+        if (hits.length === 1) {
+          const { section: sec, item } = hits[0];
+          if (!seenSkus.has(item.sku)) {
+            seenSkus.add(item.sku);
+            anchors.push({ code, item, sec });
+          }
+        }
+      }
+      if (anchors.length >= 2) {
+        const subResults = anchors.map(({ code, item, sec }) =>
+          MatchResult(text, section, 'LITERAL',
+            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high',
+              reason: `literal SKU match on '${code}' -- one of ${anchors.length} distinct items detected in this line; split into its own row` }],
+            `Multi-item line detected (${anchors.map((a) => a.item.sku).join(', ')}) -- this row is the '${code}' portion.`));
+        return MatchResult(text, section, 'MULTI', [],
+          `Detected ${anchors.length} separate literal SKU matches in one line -- split into individual rows: ${anchors.map((a) => a.item.sku).join(', ')}`,
+          subResults);
+      }
       const matches = [];
       const reasoningBits = [];
 
@@ -1108,13 +1261,13 @@
 
       for (const code of codes) {
         // 1. literal exact sku match
-        let hits = this.cat.exactSku(code, catalogSection);
+        let hits = cleanHits(this.cat.exactSku(code, catalogSection));
         let usedSection = catalogSection;
         if (!hits.length && fallbackSec) {
-          hits = this.cat.exactSku(code, fallbackSec);
+          hits = cleanHits(this.cat.exactSku(code, fallbackSec));
           usedSection = hits.length ? fallbackSec : catalogSection;
         }
-        if (!hits.length) hits = this.cat.exactSku(code); // cross-section fallback
+        if (!hits.length) hits = cleanHits(this.cat.exactSku(code)); // cross-section fallback
         if (hits.length) {
           if (hits.length === 1) {
             const { section: sec, item } = hits[0];
@@ -1277,10 +1430,8 @@
     (typeof window !== 'undefined' ? window : globalThis).MPMatcher = MatcherModule;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
-<script>
-// HTG brand logo (Horizon Turnout Gear), lifted directly from the live
+<script>// HTG brand logo (Horizon Turnout Gear), lifted directly from the live
 // MP Gear Builder app source so PDF branding stays consistent across both
 // tools.
 (function (root) {
@@ -1292,10 +1443,8 @@
     (typeof window !== 'undefined' ? window : globalThis).MP_LOGO_B64 = MP_LOGO_B64;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
-<script>
-// Port of generatePDF and its helpers (parsePrice, fmtMoney, resolveItemPrice,
+<script>// Port of generatePDF and its helpers (parsePrice, fmtMoney, resolveItemPrice,
 // skuLabel) from app_source.jsx. This is pure jsPDF logic with zero React
 // dependency in the original, so it lifts over verbatim -- same layout,
 // same branding, same copy. Requires window.jspdf (jsPDF UMD build) and
@@ -1614,10 +1763,8 @@
     (typeof window !== 'undefined' ? window : globalThis).MPPdfGen = PdfGenModule;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
-<script>
-// Parses pasted build-spec email text into the (section, text, isHeader)
+<script>// Parses pasted build-spec email text into the (section, text, isHeader)
 // lines the matcher expects. There's no Python equivalent to port --
 // ihb_spec.py was hand-transcribed as a test fixture, and HANDOFF.md
 // explicitly flagged turning that into "a real parser" as outstanding
@@ -1649,6 +1796,15 @@
   // Common bullet/numbering prefixes people paste from email clients.
   const BULLET_RE = /^\s*(?:[-*\u2022\u25CF\u2023]|\(?\d{1,2}[).]|\u2013|\u2014)\s+/;
 
+  // "N:" note marker (confirmed convention): trailing on an item line, it
+  // splits off a per-item note that never gets matched against the
+  // catalog. As an entire line on its own, it's a general note for
+  // whichever section (coat/pant/suspenders) it falls under -- confirmed
+  // it does NOT attach to the preceding item, it goes in that garment's
+  // general notes instead.
+  const NOTE_LINE_RE = /^N:\s*/i;
+  const INLINE_NOTE_RE = /\bN:\s*/i;
+
   function normalizeSectionWord(label) {
     const low = label.toLowerCase();
     if (low.startsWith('susp')) return 'suspenders';
@@ -1663,6 +1819,7 @@
   function parseSpecText(rawText) {
     const rawLines = (rawText || '').split(/\r?\n/);
     const lines = [];
+    const notes = { coat: [], pant: [], suspenders: [] };
     let currentSection = null;
     let sectionStarted = false; // have we emitted a header line for currentSection yet?
 
@@ -1681,6 +1838,30 @@
         currentSection = normalizeSectionWord(labelPrefixMatch[1]);
         sectionStarted = false;
         trimmed = labelPrefixMatch[2].trim(); // label + content on one line, e.g. "PANTS: MPL 75B2 Gold"
+        if (!trimmed) continue; // pure "PANTS:" with nothing else on the line
+      }
+
+      // Standalone "N:" line -- a general note for the current garment
+      // section, not attached to any specific item. Doesn't touch
+      // section-hint detection or sectionStarted/isHeader state below.
+      if (NOTE_LINE_RE.test(trimmed)) {
+        const noteText = trimmed.replace(NOTE_LINE_RE, '').trim();
+        if (noteText) notes[currentSection || 'coat'].push(noteText);
+        continue;
+      }
+
+      // Inline "N:" trailing an item description -- split off as a
+      // per-item note, carried alongside that line but never matched
+      // against the catalog.
+      let note = null;
+      const inlineIdx = trimmed.search(INLINE_NOTE_RE);
+      if (inlineIdx > 0) {
+        note = trimmed.slice(inlineIdx).replace(INLINE_NOTE_RE, '').trim();
+        trimmed = trimmed.slice(0, inlineIdx).trim();
+        if (!trimmed) { // nothing usable left before the marker -- treat as a general note after all
+          if (note) notes[currentSection || 'coat'].push(note);
+          continue;
+        }
       }
 
       // Re-evaluate section on every line, not just when unset -- many
@@ -1704,9 +1885,9 @@
 
       const isHeader = !sectionStarted;
       sectionStarted = true;
-      lines.push({ section: currentSection, text: trimmed, isHeader });
+      lines.push({ section: currentSection, text: trimmed, isHeader, note });
     }
-    return lines;
+    return { lines, notes };
   }
 
   const SpecParserModule = { parseSpecText, normalizeSectionWord };
@@ -1717,17 +1898,16 @@
     (typeof window !== 'undefined' ? window : globalThis).MPSpecParser = SpecParserModule;
   }
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
-<script>
-(function () {
+<script>(function () {
   'use strict';
 
   const CATALOG_URL = 'https://raw.githubusercontent.com/SteveHTG/MP_GEAR_BUILDER/main/catalog.js';
   const CROSSREF_URL = 'https://raw.githubusercontent.com/SteveHTG/MP_GEAR_BUILDER/main/cross_reference.json';
 
   let catIdx, techIdx, matcher;
-  let parsedLines = [];   // [{section, text, isHeader}]
+  let parsedLines = [];   // [{section, text, isHeader, note}]
+  let generalNotes = { coat: [], pant: [], suspenders: [] }; // standalone "N:" lines, per garment
   let rows = [];          // parallel UI state per parsedLines entry, built in runMatcher()
   let pantType = null;
 
@@ -1769,7 +1949,9 @@
   function onParseSpec() {
     const text = $('specInput').value;
     if (!text.trim()) { setStatus('Paste a build spec first.', true); return; }
-    parsedLines = window.MPSpecParser.parseSpecText(text);
+    const parsed = window.MPSpecParser.parseSpecText(text);
+    parsedLines = parsed.lines;
+    generalNotes = parsed.notes;
     if (!parsedLines.length) { setStatus('Nothing recognizable in that text.', true); return; }
     renderReviewTable();
     showStage('review');
@@ -1807,6 +1989,7 @@
     syncReviewEditsFromDom();
     pantType = null;
     rows = [];
+    const sectionsSeen = new Set();
     for (const line of parsedLines) {
       let catalogSection;
       if (line.section === 'coat') {
@@ -1817,7 +2000,19 @@
       } else {
         catalogSection = 'suspenders';
       }
+      sectionsSeen.add(line.section);
       const res = matcher.matchLine(line.section, catalogSection, line.text, line.isHeader);
+      if (res.status === 'MULTI' && res.subResults && res.subResults.length) {
+        res.subResults.forEach((sub) => {
+          rows.push({
+            line: line.text, section: line.section, catalogSection,
+            status: sub.status, matches: sub.matches, reasoning: sub.reasoning,
+            chosenIdx: sub.matches.length ? 0 : -1, qty: 1, grade: 'std', confirmed: false,
+            searchedItem: null, note: line.note,
+          });
+        });
+        continue;
+      }
       rows.push({
         line: line.text,
         section: line.section,
@@ -1830,8 +2025,31 @@
         grade: 'std',
         confirmed: false,
         searchedItem: null,
+        note: line.note,
       });
     }
+
+    // Composite-code decode (e.g. header "75B2") adds Thermal Liner /
+    // Moisture Barrier as their own priced rows, for every garment
+    // section actually present in this build -- once per garment, not
+    // once per input line, since these are derived from the header
+    // rather than typed as their own spec line.
+    if (sectionsSeen.has('coat')) {
+      matcher.getCompositeLines('coat', 'coat').forEach((cr) => rows.push({
+        line: cr.line, section: cr.section, catalogSection: 'coat', status: cr.status,
+        matches: cr.matches, reasoning: cr.reasoning, chosenIdx: cr.matches.length ? 0 : -1,
+        qty: 1, grade: 'std', confirmed: false, searchedItem: null, note: null,
+      }));
+    }
+    if (sectionsSeen.has('pant')) {
+      const pantSec = pantType || 'pfp';
+      matcher.getCompositeLines('pant', pantSec).forEach((cr) => rows.push({
+        line: cr.line, section: cr.section, catalogSection: pantSec, status: cr.status,
+        matches: cr.matches, reasoning: cr.reasoning, chosenIdx: cr.matches.length ? 0 : -1,
+        qty: 1, grade: 'std', confirmed: false, searchedItem: null, note: null,
+      }));
+    }
+
     renderMatchTable();
     showStage('match');
   }
@@ -1939,6 +2157,7 @@
         '<td class="col-num">' + (i + 1) + '</td>' +
         '<td class="col-badge"><span class="badge ' + (STATUS_CLASS[row.status] || '') + '">' + STATUS_LABELS[row.status] + '</span></td>' +
         '<td class="col-text">' + escapeHtml(row.line) +
+        (row.note ? '<div class="item-note">Note: ' + escapeHtml(row.note) + '</div>' : '') +
         (row.reasoning ? '<div class="reasoning">' + escapeHtml(row.reasoning) + '</div>' : '') + '</td>' +
         '<td class="col-match">' + matchCellHtml(row, i) + '</td>' +
         '<td class="col-price" data-i="' + i + '">' + priceCellHtml(row, i) + '</td>' +
@@ -2052,9 +2271,14 @@
   // ─── Build final item lists + generate PDF ──────────────────────────
   function buildFinalItems() {
     const coatItems = [], pantItems = [], suspItems = [];
-    const coatNotesLines = [], pantNotesLines = [];
+    const coatNotesLines = (generalNotes.coat || []).map((n) => '\u2022 ' + n);
+    const pantNotesLines = [...(generalNotes.pant || []), ...(generalNotes.suspenders || [])].map((n) => '\u2022 ' + n);
 
     rows.forEach((row) => {
+      if (row.note) {
+        const noteBucket = row.section === 'coat' ? coatNotesLines : pantNotesLines;
+        noteBucket.push('\u2022 ' + row.line + ' \u2014 ' + row.note);
+      }
       const resolved = getResolvedItem(row);
       const include = resolved && (isAutoStatus(row.status) || row.confirmed);
       if (!include) {
@@ -2137,7 +2361,6 @@
     init();
   });
 })();
-
 </script>
 </body>
 </html>

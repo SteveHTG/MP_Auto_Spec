@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mp-spec-matcher-v1';
+const CACHE_NAME = 'mp-spec-matcher-v3';
 const SHELL_ASSETS = [
   './',
   './index.html',
