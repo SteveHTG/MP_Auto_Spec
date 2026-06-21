@@ -1222,6 +1222,37 @@
       return `PKBLXP1-${suf3} + PKRPFF1-KV`;
     }
 
+    // Per Steve: a build-spec line that's literally just "IC Patch" with
+    // no other description, or whose note says the artwork is "to be
+    // supplied" (i.e. not yet specified), is always the generic IC Patch
+    // item -- PO-IC in the catalog (filed under 'coat' regardless of
+    // which garment section the build line appears under, since patches
+    // are a coat-family item). Forced to a deterministic rule rather than
+    // left to fuzzy scoring because the old duplicate Std/Premium rows in
+    // a stale catalog could otherwise make this falsely ambiguous.
+    resolveIcPatch(text, noteText, catalogSection, fallbackSec) {
+      const low = text.toLowerCase().trim().replace(/[.,;:]+$/, '');
+      const mentionsIcPatch = /\bic\s*patch(es)?\b/.test(low);
+      if (!mentionsIcPatch) return null;
+
+      const isBareLine = /^ic\s*patch(es)?$/.test(low);
+      const noteSaysTbd = !!noteText && /to\s*be\s*supplied/i.test(noteText);
+      if (!isBareLine && !noteSaysTbd) return null;
+
+      const reasonBit = isBareLine
+        ? "'IC Patch' with no other description"
+        : "note confirms artwork 'to be supplied' for an IC patch";
+
+      for (const sec of [catalogSection, fallbackSec, 'coat'].filter(Boolean)) {
+        const hits = this.cat.exactSku('PO-IC', sec);
+        if (hits.length) {
+          return ['MATCH', hits[0].item, sec, `${reasonBit} -> confirmed PO-IC (IC Patches)`];
+        }
+      }
+      return ['NOTE', null, null,
+        `Confirmed as an IC Patch (PO-IC) -- ${reasonBit} -- but that SKU isn't present in the live catalog yet; needs a manual price lookup or a catalog update upstream.`];
+    }
+
     resolveXLBellowsKevlar(text, catalogSection, fallbackSec) {
       const low = text.toLowerCase();
       if (!low.includes('xl bellows') && !low.includes('x-large bellows')) return null;
@@ -1442,6 +1473,20 @@
           return MatchResult(text, section, 'CROSSWALK',
             [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
             'resolved via bracket-lettering count decode');
+        }
+      }
+
+      const icPatchHit = this.resolveIcPatch(text, noteText, catalogSection, fallbackSec);
+      if (icPatchHit) {
+        const kind = icPatchHit[0];
+        if (kind === 'NOTE') {
+          const [, , , why] = icPatchHit;
+          return MatchResult(text, section, 'NOTE', [], why);
+        } else {
+          const [, item, sec, why] = icPatchHit;
+          return MatchResult(text, section, 'CROSSWALK',
+            [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            "resolved via confirmed 'IC Patch' -> PO-IC mapping");
         }
       }
 
@@ -2803,8 +2848,18 @@
           // price). That's not the same failure as an unrecognized SKU, so
           // don't claim it wasn't recognized -- show the actual options.
           refreshMatchCell(i);
+          // Bug fix: this branch re-runs every time the field blurs while
+          // the typed value is still the same unresolved ambiguous text --
+          // which is exactly what happens on every attempt to click/tab
+          // away from it. Calling .focus() here used to steal focus right
+          // back, turning "leave this field" into an infinite trap (the
+          // dropdown reopens, the cursor snaps back, and the rest of the
+          // page becomes unreachable). Keep the typed text and the
+          // disambiguation dropdown visible, but let focus actually leave --
+          // the user can click back in and pick an option whenever they're
+          // ready; they shouldn't be forced to right now.
           const freshInput = document.querySelector('.searchInput[data-i="' + i + '"]');
-          if (freshInput) { freshInput.value = typedVal; freshInput.focus(); }
+          if (freshInput) { freshInput.value = typedVal; }
           paintSearchResults(i, hits.map((h) => ({ item: h.item, section: h.section || row.catalogSection })));
           return;
         }
