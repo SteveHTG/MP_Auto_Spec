@@ -136,6 +136,7 @@
     border: 1px solid var(--border); border-radius: 4px;
   }
   .search-wrap input.is-suggestion { color: #8A6200; font-style: italic; border-color: var(--gold); }
+  .search-wrap input.is-auto { color: #1F6B3D; border-color: #BFE3CC; background: #F4FBF6; }
   .suggestion-hint { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
   .search-wrap input.revert-flash { border-color: var(--red); box-shadow: 0 0 0 2px rgba(185,28,28,0.18); transition: box-shadow 0.2s, border-color 0.2s; }
   .revert-warning { font-size: 10px; color: var(--red); margin-top: 2px; font-weight: 600; }
@@ -150,6 +151,7 @@
   .search-results li:hover { background: #EEF2F9; }
   .search-results .sr-sku { font-weight: 600; color: var(--navy); }
   .search-results .sr-desc { color: var(--text-dim); }
+  .search-results .sr-crosswalk { color: #8A6200; font-style: italic; }
   tr.confirm-pending td { background: #FFF8E8; }
   tr.confirm-pending:hover td { background: #FFF3D6; }
   .running-total {
@@ -422,7 +424,7 @@
       const out = [];
       for (const sec of pools) {
         for (const { idx, item } of this.bySection.get(sec)) {
-          if ((item.sku || '').startsWith(token)) out.push({ section: sec, idx, item });
+          if ((item.sku || '').startsWith(token) || (item.legacySku || '').startsWith(token)) out.push({ section: sec, idx, item });
         }
       }
       return out;
@@ -801,7 +803,7 @@
         if (hits.length) {
           const { item } = hits[0];
           return MatchResult(`[Composite ${tag}] ${p.label} \u2014 ${name}`, uiSection, 'CROSSWALK',
-            [{ sku: item.sku, section: catalogSection, category: item.category, description: item.description, price: item.price, confidence: 'high',
+            [{ sku: item.sku, legacySku: item.legacySku, section: catalogSection, category: item.category, description: item.description, price: item.price, confidence: 'high',
               reason: `Composite code ${tag} -> ${p.label} code '${p.code}' (${name})` }],
             `Decoded from composite code ${tag} on the build header.`);
         }
@@ -827,7 +829,7 @@
           this.resolvedOsSuffix[catalogSection] = suf3;
           const { item } = hits[0];
           candidates.push({
-            sku: item.sku, section: catalogSection, category: item.category,
+            sku: item.sku, legacySku: item.legacySku, section: catalogSection, category: item.category,
             description: item.description, price: item.price,
             confidence: 'high',
             reason: `weight code '${weight}' + color '${colorWord}' -> suffix ${suf3}`,
@@ -1186,6 +1188,12 @@
         if (hit) {
           return ['MATCH', hit.item, sec, `'Tool Pocket divider' -> confirmed PKTDIV (Tool Divider) family, ${reasonBit}`];
         }
+        if (sec === 'pfp') {
+          const pfpHit = pricedHit('PKTDIVPF', sec);
+          if (pfpHit) {
+            return ['MATCH', pfpHit.item, sec, `'Tool Pocket divider' -> confirmed PKTDIVPF (PFP Tool Divider) family, ${reasonBit}`];
+          }
+        }
       }
       const coatHit = pricedHit('PKTDIVC', 'coat');
       if (coatHit) {
@@ -1202,6 +1210,18 @@
     // "Sewn Flat" / "Semi" XL Bellows variants, which are different
     // pocket constructions entirely -- this only fires on the plain "XL
     // Bellows ... Kevlar" phrasing, not those.
+    // Confirmed family naming differs by pant type: LTO uses
+    // PKBLXP1-{suffix} + PKRPFF1-KV; PFP uses the genuinely different
+    // PKBLXPF-{suffix} + PKRPFFS- KEV (note the literal space before KEV
+    // in Morning Pride's own source data -- preserved as-is, not a typo
+    // on our end). Earlier rounds assumed PFP had no Kevlar XL Bellows
+    // option at all, because the live catalog never had it -- the cleaner
+    // PFP data confirms it exists, just under different naming.
+    static xlBellowsKevlarSku(sec, suf3) {
+      if (sec === 'pfp') return `PKBLXPF-${suf3} + PKRPFFS- KEV`;
+      return `PKBLXP1-${suf3} + PKRPFF1-KV`;
+    }
+
     resolveXLBellowsKevlar(text, catalogSection, fallbackSec) {
       const low = text.toLowerCase();
       if (!low.includes('xl bellows') && !low.includes('x-large bellows')) return null;
@@ -1211,30 +1231,34 @@
       const [, colorCode] = detectColor(text);
       const weight = weightMatch(text);
 
-      for (const sec of [catalogSection, fallbackSec, 'lto'].filter(Boolean)) {
+      for (const sec of [catalogSection, fallbackSec, 'lto', 'pfp'].filter(Boolean)) {
+        const familyLabel = sec === 'pfp' ? 'PKBLXPF+PKRPFFS-KEV' : 'PKBLXP1+PKRPFF1-KV';
         if (weight && colorCode) {
           const suf3 = weight + colorCode;
-          const hits = this.cat.exactSku(`PKBLXP1-${suf3} + PKRPFF1-KV`, sec);
+          const hits = this.cat.exactSku(SpecMatcher.xlBellowsKevlarSku(sec, suf3), sec);
           if (hits.length) {
             const { item } = hits[0];
             return ['MATCH', item, sec,
-              `'XL Bellows ... Kevlar' -> confirmed PKBLXP1+PKRPFF1-KV family, weight '${weight}' + color suffix ${suf3} (priced each -- adjust qty for both legs)`];
+              `'XL Bellows ... Kevlar' -> confirmed ${familyLabel} family, weight '${weight}' + color suffix ${suf3} (priced each -- adjust qty for both legs)`];
           }
         }
         const defaultSuf3 = this.resolvedOsSuffix[sec] || this.resolvedOsSuffix[catalogSection];
         if (!colorCode && defaultSuf3) {
-          const hits = this.cat.exactSku(`PKBLXP1-${defaultSuf3} + PKRPFF1-KV`, sec);
+          const hits = this.cat.exactSku(SpecMatcher.xlBellowsKevlarSku(sec, defaultSuf3), sec);
           if (hits.length) {
             const { item } = hits[0];
             return ['MATCH', item, sec,
-              `'XL Bellows ... Kevlar' -> confirmed PKBLXP1+PKRPFF1-KV family, no color stated -- defaulted to selected outershell suffix ${defaultSuf3} (priced each -- adjust qty for both legs)`];
+              `'XL Bellows ... Kevlar' -> confirmed ${familyLabel} family, no color stated -- defaulted to selected outershell suffix ${defaultSuf3} (priced each -- adjust qty for both legs)`];
           }
-          // Confirmed family and confirmed construction, but this exact
-          // suffix isn't in the live catalog yet -- flag clearly instead
-          // of silently guessing a price from a different suffix.
-          return ['NOTE', null, null,
-            `Confirmed family PKBLXP1-{suffix} + PKRPFF1-KV (priced each), but suffix '${defaultSuf3}' isn't in the live catalog for this family yet -- needs a manual price lookup or a catalog update upstream.`];
         }
+      }
+      // Confirmed family and confirmed construction, but this exact
+      // suffix isn't in the live catalog yet for either pant type --
+      // flag clearly instead of silently guessing a price.
+      const defaultSuf3 = this.resolvedOsSuffix[catalogSection] || this.resolvedOsSuffix[fallbackSec];
+      if (!colorCode && defaultSuf3) {
+        return ['NOTE', null, null,
+          `Confirmed family (PKBLXP1+PKRPFF1-KV for LTO, PKBLXPF+PKRPFFS-KEV for PFP), but suffix '${defaultSuf3}' isn't in the live catalog for this pant type's family yet -- needs a manual price lookup or a catalog update upstream.`];
       }
       return null;
     }
@@ -1416,7 +1440,7 @@
         } else {
           const [, item, sec, why] = letteringHit;
           return MatchResult(text, section, 'CROSSWALK',
-            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
             'resolved via bracket-lettering count decode');
         }
       }
@@ -1430,7 +1454,7 @@
         } else {
           const [, item, sec, why] = xlBellowsKevlarHit;
           return MatchResult(text, section, 'CROSSWALK',
-            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
             'resolved via confirmed XL Bellows + Kevlar -> PKBLXP1+PKRPFF1-KV mapping');
         }
       }
@@ -1444,7 +1468,7 @@
         } else {
           const [, item, sec, why] = closureHit;
           return MatchResult(text, section, 'CROSSWALK',
-            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
             'resolved via authoritative Closures-PANT crosswalk');
         }
       }
@@ -1453,7 +1477,7 @@
       if (trimHit) {
         const [item, sec, why] = trimHit;
         return MatchResult(text, section, 'CROSSWALK',
-          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+          [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
           'resolved via confirmed trim shape/suffix mapping');
       }
 
@@ -1461,7 +1485,7 @@
       if (cuffHit) {
         const [item, sec, why, conf] = cuffHit;
         return MatchResult(text, section, 'CROSSWALK',
-          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
+          [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
           'resolved via confirmed cuff family + material/color mapping');
       }
 
@@ -1469,7 +1493,7 @@
       if (radioPocketHit) {
         const [item, sec, why, conf] = radioPocketHit;
         return MatchResult(text, section, 'CROSSWALK',
-          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
+          [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
           'resolved via confirmed double-notch radio pocket rule');
       }
 
@@ -1482,7 +1506,7 @@
         } else {
           const [, item, sec, why] = toolDividerHit;
           return MatchResult(text, section, 'CROSSWALK',
-            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
             'resolved via confirmed Tool Divider (PKTDIV) family mapping');
         }
       }
@@ -1491,7 +1515,7 @@
       if (narrowKneeHit) {
         const [item, sec, why, conf] = narrowKneeHit;
         return MatchResult(text, section, 'CROSSWALK',
-          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
+          [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
           "resolved via confirmed 'Narrow Knee' -> KNBFN family mapping");
       }
 
@@ -1525,7 +1549,7 @@
       if (anchors.length >= 2) {
         const subResults = anchors.map(({ code, item, sec }) =>
           MatchResult(text, section, 'LITERAL',
-            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high',
+            [{ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high',
               reason: `literal SKU match on '${code}' -- one of ${anchors.length} distinct items detected in this line; split into its own row` }],
             `Multi-item line detected (${anchors.map((a) => a.item.sku).join(', ')}) -- this row is the '${code}' portion.`));
         return MatchResult(text, section, 'MULTI', [],
@@ -1553,11 +1577,11 @@
         if (hits.length) {
           if (hits.length === 1) {
             const { section: sec, item } = hits[0];
-            matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: `literal SKU match on '${code}'` });
+            matches.push({ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: `literal SKU match on '${code}'` });
           } else {
             const [item, sec, why, conf] = this._colorDisambiguate(hits, disambigText, usedSection);
             if (item) {
-              matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `literal SKU '${code}' (${hits.length} variants) -- ${why}` });
+              matches.push({ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `literal SKU '${code}' (${hits.length} variants) -- ${why}` });
             }
           }
           reasoningBits.push(`'${code}': literal SKU hit`);
@@ -1574,7 +1598,7 @@
         if (prefixHits.length) {
           const [item, sec, why, conf] = this._colorDisambiguate(prefixHits, disambigText, usedSection);
           if (item) {
-            matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `SKU prefix '${code}' -- ${why}` });
+            matches.push({ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `SKU prefix '${code}' -- ${why}` });
             reasoningBits.push(`'${code}': sku-prefix hit`);
             continue;
           }
@@ -1598,7 +1622,7 @@
             if (ph.length) {
               const [item, sec, why, conf] = this._colorDisambiguate(ph, disambigText, usedSec);
               if (item) {
-                matches.push({ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `crosswalk '${code}' -> Old Kit# '${stem}' (${row.description || ''}) -- ${why}` });
+                matches.push({ sku: item.sku, legacySku: item.legacySku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: `crosswalk '${code}' -> Old Kit# '${stem}' (${row.description || ''}) -- ${why}` });
                 reasoningBits.push(`'${code}': crosswalk via Old Kit# '${stem}'`);
                 resolved = true;
                 break;
@@ -1744,7 +1768,7 @@
           }
           const rerankNote = item !== fuzzy[0].item ? ` (re-ranked for material '${materialWord}')` : '';
           return MatchResult(text, section, 'FUZZY',
-            [{ sku: item.sku, section: catalogSection, category: item.category, description: item.description, price: item.price, confidence, reason: `description fuzzy match, score=${score.toFixed(2)}${rerankNote}${extraFlag}` }],
+            [{ sku: item.sku, legacySku: item.legacySku, section: catalogSection, category: item.category, description: item.description, price: item.price, confidence, reason: `description fuzzy match, score=${score.toFixed(2)}${rerankNote}${extraFlag}` }],
             'no literal/crosswalk hit; best fuzzy candidates: ' + fuzzy.slice(0, 5).map((f) => `${f.item.sku} (${f.score.toFixed(2)})`).join(', '));
         }
 
@@ -2261,6 +2285,27 @@
   let rows = [];          // parallel UI state per parsedLines entry, built in runMatcher()
   let pantType = null;
 
+  // Confirmed by Steve: which outershell models price as Premium vs
+  // Standard materials. Keyed off the build's resolved outershell suffix
+  // for that section (e.g. '75D' -> model '75' -> Standard). Kevlar
+  // reinforcement always prices as Standard regardless of the outershell
+  // model, so that check takes priority over the model lookup.
+  const PREMIUM_OS_MODELS = new Set(['12', '38', '48', '62', '72', '96', '80']);
+  const STANDARD_OS_MODELS = new Set(['14', '17', '39', '86', '53', '56', '75', '85', '89']);
+
+  function modelGrade(catalogSection) {
+    const suf3 = matcher && matcher.resolvedOsSuffix && matcher.resolvedOsSuffix[catalogSection];
+    if (!suf3 || suf3.length < 2) return 'std';
+    const model = suf3.slice(0, 2);
+    if (PREMIUM_OS_MODELS.has(model)) return 'prm';
+    return 'std'; // Standard models, or an unrecognized one -- default safely to Std
+  }
+
+  function defaultGradeFor(catalogSection, lineText) {
+    if (/kevlar/i.test(lineText || '')) return 'std';
+    return modelGrade(catalogSection);
+  }
+
   const $ = (id) => document.getElementById(id);
 
   function setStatus(msg, isError) {
@@ -2357,7 +2402,7 @@
           rows.push({
             line: line.text, section: line.section, catalogSection,
             status: sub.status, matches: sub.matches, reasoning: sub.reasoning,
-            chosenIdx: sub.matches.length ? 0 : -1, qty: 1, grade: 'std', confirmed: false,
+            chosenIdx: sub.matches.length ? 0 : -1, qty: 1, grade: defaultGradeFor(catalogSection, line.text), confirmed: false,
             searchedItem: null, note: line.note,
           });
         });
@@ -2372,7 +2417,7 @@
         reasoning: res.reasoning,
         chosenIdx: res.matches.length ? 0 : -1,
         qty: 1,
-        grade: 'std',
+        grade: defaultGradeFor(catalogSection, line.text),
         confirmed: false,
         searchedItem: null,
         note: line.note,
@@ -2388,7 +2433,7 @@
       matcher.getCompositeLines('coat', 'coat').forEach((cr) => rows.push({
         line: cr.line, section: cr.section, catalogSection: 'coat', status: cr.status,
         matches: cr.matches, reasoning: cr.reasoning, chosenIdx: cr.matches.length ? 0 : -1,
-        qty: 1, grade: 'std', confirmed: false, searchedItem: null, note: null,
+        qty: 1, grade: defaultGradeFor('coat', cr.line), confirmed: false, searchedItem: null, note: null,
       }));
     }
     if (sectionsSeen.has('pant')) {
@@ -2396,7 +2441,7 @@
       matcher.getCompositeLines('pant', pantSec).forEach((cr) => rows.push({
         line: cr.line, section: cr.section, catalogSection: pantSec, status: cr.status,
         matches: cr.matches, reasoning: cr.reasoning, chosenIdx: cr.matches.length ? 0 : -1,
-        qty: 1, grade: 'std', confirmed: false, searchedItem: null, note: null,
+        qty: 1, grade: defaultGradeFor(pantSec, cr.line), confirmed: false, searchedItem: null, note: null,
       }));
     }
 
@@ -2417,26 +2462,73 @@
     if (row.searchedItem) return row.searchedItem.item;
     if (row.matches.length && row.chosenIdx >= 0) {
       const m = row.matches[row.chosenIdx];
-      const hits = catIdx.exactSku(m.sku, m.section);
+      let hits = catIdx.exactSku(m.sku, m.section);
+      // A New Kit# can be a generic code shared by many color/material
+      // variants of the same family (that's the whole point of it being
+      // "new" -- it collapses the old per-variant codes). When that
+      // happens, re-deriving from m.sku alone returns every variant; use
+      // the specific legacySku the matcher actually resolved to (already
+      // color/suffix-disambiguated by _colorDisambiguate) to pick the
+      // right one back out instead of silently taking the first hit.
+      if (hits.length > 1 && m.legacySku) {
+        const narrowed = hits.filter((h) => (h.item.legacySku || h.item.sku) === m.legacySku);
+        if (narrowed.length) hits = narrowed;
+      }
       return hits.length ? hits[0].item : m;
     }
     return null;
   }
 
-  // Substring search across a catalog section's items, for the Probable
-  // Match / Note rows where the matcher's own candidates aren't trusted
-  // enough to auto-include.
+  // Resolves a single typed/searched token through the Old Kit#
+  // crosswalk (cross_reference.json via techIdx) when it doesn't show up
+  // as a literal substring anywhere in the catalog -- e.g. a legacy kit
+  // number that only exists in the crosswalk, not in any current sku/
+  // legacySku/description field. Mirrors the stem-extraction approach
+  // matcher.js already uses for the same crosswalk during automatic spec
+  // parsing (see matchLine's tech-pack crosswalk step), just exposed here
+  // for the manual search box too.
+  function crosswalkHits(token, catalogSection) {
+    if (!techIdx || !token) return [];
+    let tpRows = techIdx.lookup(token);
+    if (!tpRows.length) tpRows = techIdx.lookupFuzzyPrefix(token);
+    const out = [];
+    const seen = new Set();
+    for (const row of tpRows) {
+      const oldKit = (row.oldKit || '').trim();
+      const stems = (oldKit.toUpperCase().match(/[A-Z0-9-]{3,}/g)) || [token.toUpperCase()];
+      for (const stem of stems) {
+        let hits = catIdx.skuPrefix(stem, catalogSection);
+        if (!hits.length) hits = catIdx.skuPrefix(stem); // cross-section fallback
+        for (const h of hits) {
+          const key = (h.section || catalogSection) + '||' + h.item.sku;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push({ item: h.item, section: h.section || catalogSection, viaOldKit: stem });
+        }
+      }
+    }
+    return out;
+  }
+
+  // Substring search across a catalog section's items, for the search box
+  // shown on every row. Direct sku/legacySku/description/category
+  // substring hits are tried first; if the typed text doesn't show up
+  // literally anywhere (a bare legacy Kit# typically won't), it's also
+  // resolved through the crosswalk so old and current kit numbers both
+  // find the right item.
   function searchCatalog(catalogSection, query) {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const tokens = q.split(/\s+/).filter(Boolean);
     const pool = catIdx.bySection.get(catalogSection) || [];
     const out = [];
+    const seenSku = new Set();
     for (const { item } of pool) {
       const hay = ((item.sku || '') + ' ' + (item.legacySku || '') + ' ' +
         (item.description || '') + ' ' + (item.category || '')).toLowerCase();
       if (tokens.every((t) => hay.includes(t))) {
         out.push({ item });
+        seenSku.add(item.sku);
         if (out.length >= 200) break;
       }
     }
@@ -2446,22 +2538,26 @@
       if (aStarts !== bStarts) return aStarts - bStarts;
       return (a.item.sku || '').localeCompare(b.item.sku || '');
     });
-    return out.slice(0, 25);
+    let results = out.slice(0, 25);
+    if (results.length < 25) {
+      const cw = crosswalkHits(query.trim(), catalogSection)
+        .filter((h) => !seenSku.has(h.item.sku));
+      for (const h of cw) {
+        results.push(h);
+        if (results.length >= 25) break;
+      }
+    }
+    return results;
   }
 
+  // Every row -- whether the matcher resolved it confidently (Exact/
+  // Match) or not -- renders the same searchable input, so a confident
+  // match can always be overridden if it's wrong. Auto-matched rows just
+  // start pre-filled with the matcher's pick and a quieter "click to
+  // change" hint instead of the amber "needs confirmation" styling that
+  // Probable Match / Note rows get.
   function matchCellHtml(row, i) {
-    if (isAutoStatus(row.status)) {
-      if (row.matches.length > 1) {
-        const opts = row.matches.map((m, mi) =>
-          '<option value="' + mi + '"' + (mi === row.chosenIdx ? ' selected' : '') + '>' +
-          escapeHtml(m.sku) + ' \u2014 ' + escapeHtml((m.description || '').slice(0, 40)) + '</option>').join('');
-        return '<select data-i="' + i + '" class="matchSelect">' + opts + '</select>';
-      }
-      const m = row.matches[0];
-      return m
-        ? '<span class="match-text">' + escapeHtml(m.sku) + ' \u2014 ' + escapeHtml((m.description || '').slice(0, 50)) + '</span>'
-        : '<span class="no-match">no candidate</span>';
-    }
+    const auto = isAutoStatus(row.status) && !row.searchedItem;
     const suggestion = row.matches.length ? row.matches[row.chosenIdx >= 0 ? row.chosenIdx : 0] : null;
     const resolvedItem = row.searchedItem ? row.searchedItem.item : null;
     const displayVal = resolvedItem
@@ -2469,12 +2565,18 @@
       : suggestion
         ? suggestion.sku + ' \u2014 ' + (suggestion.description || '')
         : '';
-    const isSuggestionOnly = !resolvedItem && !!suggestion;
-    const placeholder = suggestion ? 'Search to pick something else\u2026' : 'No suggestion \u2014 type a SKU or description to search\u2026';
+    const isSuggestionOnly = !resolvedItem && !!suggestion && !auto;
+    let extraClass = '';
+    if (auto) extraClass = ' is-auto';
+    else if (isSuggestionOnly) extraClass = ' is-suggestion';
+    const placeholder = suggestion ? 'Search to pick something else\u2026' : 'No suggestion \u2014 type a SKU, Kit#, or description to search\u2026';
+    let hint = '';
+    if (auto) hint = '<div class="suggestion-hint">matched automatically \u2014 click in to change it if it\u2019s wrong</div>';
+    else if (isSuggestionOnly) hint = '<div class="suggestion-hint">matcher\u2019s best guess \u2014 confirm or search for something else</div>';
     return '<div class="search-wrap">' +
-      '<input type="text" class="searchInput' + (isSuggestionOnly ? ' is-suggestion' : '') + '" data-i="' + i + '" autocomplete="off" ' +
+      '<input type="text" class="searchInput' + extraClass + '" data-i="' + i + '" autocomplete="off" ' +
       'placeholder="' + escapeHtml(placeholder) + '" value="' + escapeHtml(displayVal) + '">' +
-      (isSuggestionOnly ? '<div class="suggestion-hint">matcher\u2019s best guess \u2014 confirm or search for something else</div>' : '') +
+      hint +
       '<ul class="search-results" data-i="' + i + '"></ul>' +
       '</div>';
   }
@@ -2537,16 +2639,21 @@
     if (tr) tr.classList.toggle('confirm-pending', needsConfirm && !row.confirmed);
   }
 
-  function showSearchResults(i, query) {
+  function paintSearchResults(i, results) {
     const ul = document.querySelector('.search-results[data-i="' + i + '"]');
     if (!ul) return;
-    const results = searchCatalog(rows[i].catalogSection, query);
     ul._results = results;
     if (!results.length) { ul.style.display = 'none'; ul.innerHTML = ''; return; }
-    ul.innerHTML = results.map(({ item }) =>
-      '<li data-sku="' + escapeHtml(item.sku) + '"><span class="sr-sku">' + escapeHtml(item.sku) + '</span> \u2014 ' +
-      '<span class="sr-desc">' + escapeHtml((item.description || '').slice(0, 60)) + '</span></li>').join('');
+    ul.innerHTML = results.map(({ item, viaOldKit }, idx) =>
+      '<li data-idx="' + idx + '"><span class="sr-sku">' + escapeHtml(item.sku) + '</span> \u2014 ' +
+      '<span class="sr-desc">' + escapeHtml((item.description || '').slice(0, 60)) + '</span>' +
+      (viaOldKit ? ' <span class="sr-crosswalk">(via Old Kit# ' + escapeHtml(viaOldKit) + ')</span>' : '') +
+      '</li>').join('');
     ul.style.display = '';
+  }
+
+  function showSearchResults(i, query) {
+    paintSearchResults(i, searchCatalog(rows[i].catalogSection, query));
   }
 
   function onMatchBodyInput(e) {
@@ -2564,11 +2671,7 @@
     const t = e.target;
     const i = +t.dataset.i;
     if (Number.isNaN(i)) return;
-    if (t.classList.contains('matchSelect')) {
-      rows[i].chosenIdx = +t.value;
-      rows[i].searchedItem = null;
-      refreshRowDerived(i);
-    } else if (t.classList.contains('gradeSelect')) {
+    if (t.classList.contains('gradeSelect')) {
       rows[i].grade = t.value;
       refreshRowDerived(i);
     } else if (t.classList.contains('confirmCheck')) {
@@ -2584,11 +2687,11 @@
   }
 
   function onMatchBodyMousedown(e) {
-    const li = e.target.closest('li[data-sku]');
+    const li = e.target.closest('li[data-idx]');
     if (!li) return;
     const ul = li.closest('.search-results');
     const i = +ul.dataset.i;
-    const picked = (ul._results || []).find(({ item }) => item.sku === li.dataset.sku);
+    const picked = (ul._results || [])[+li.dataset.idx];
     if (!picked) return;
     rows[i].searchedItem = picked;
     rows[i].chosenIdx = -1;
@@ -2679,6 +2782,10 @@
       if (typedSku) {
         let hits = catIdx.exactSku(typedSku, row.catalogSection);
         if (!hits.length) hits = catIdx.exactSku(typedSku);
+        // A bare legacy Kit# usually won't appear as a literal sku/
+        // legacySku value -- it only resolves through the cross-reference
+        // crosswalk -- so try that next instead of giving up.
+        if (!hits.length) hits = crosswalkHits(typedSku, row.catalogSection);
         if (hits.length === 1) {
           row.searchedItem = { item: hits[0].item };
           row.chosenIdx = -1;
@@ -2688,6 +2795,17 @@
           if (cb) cb.checked = true;
           refreshRowDerived(i);
           refreshRowPendingClass(i);
+          return;
+        }
+        if (hits.length > 1) {
+          // Real, recognized code -- it just maps to more than one catalog
+          // row (e.g. PO-IC has separate Std/Premium entries at the same
+          // price). That's not the same failure as an unrecognized SKU, so
+          // don't claim it wasn't recognized -- show the actual options.
+          refreshMatchCell(i);
+          const freshInput = document.querySelector('.searchInput[data-i="' + i + '"]');
+          if (freshInput) { freshInput.value = typedVal; freshInput.focus(); }
+          paintSearchResults(i, hits.map((h) => ({ item: h.item, section: h.section || row.catalogSection })));
           return;
         }
       }
