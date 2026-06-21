@@ -698,6 +698,17 @@
     return good.length ? good : hits;
   }
 
+  // Multi-part combo SKUs (e.g. "PKBLC1-75D + PKBLC-SEMI1 + PKRCFF1-KV" for
+  // a Kevlar-lined bellows pocket, where the Kevlar add-on piece is always
+  // listed last) break a plain `.endsWith(suffix)` check, since the combo
+  // string's literal ending is whichever piece happens to be last -- not
+  // necessarily the color/weight-bearing piece. Splitting on '+' and
+  // checking each component catches the real suffix wherever it lives.
+  function comboPartEndsWith(skuOrVcode, suffix) {
+    if (!skuOrVcode || !suffix) return false;
+    return skuOrVcode.split('+').some((part) => part.trim().toUpperCase().endsWith(suffix));
+  }
+
   function MatchResult(line, section, status, matches, reasoning, subResults) {
     return { line, section, status, matches: matches || [], reasoning: reasoning || '', subResults: subResults || null };
   }
@@ -1133,7 +1144,100 @@
       return null;
     }
 
-    // Confirmed by Steve via lettering.csv: lettering SKUs are sold as one
+    // Confirmed (Steve, this round): "Tool Pocket divider" is the pant-
+    // side accessory and specifically the Tool Divider product line
+    // (PKTDIV / coat-side PKTDIVC), not the separate "Bellows Pkt
+    // Divider" line (PKDIV/PKDIVC) the fuzzy matcher otherwise confuses
+    // it with on near-identical word overlap. The live catalog's pant-
+    // side PKTDIV-{suffix} rows are mostly corrupted/incomplete (missing
+    // suffix and price both, not just description) for every color
+    // except PKTDIV-KV -- this falls back to the coat-side PKTDIVC
+    // family as a price stand-in when that happens, since the suffixes
+    // that ARE clean on both sides price identically (same accessory,
+    // garment doesn't seem to matter). Flagged plainly in the reasoning
+    // so it's easy to correct if that assumption is wrong.
+    resolveToolDivider(text, catalogSection, fallbackSec) {
+      const low = text.toLowerCase();
+      if (!low.includes('tool') || !low.includes('divider')) return null;
+
+      const [, colorCode] = detectColor(text);
+      const weight = weightMatch(text);
+
+      let suf3 = null, reasonBit = '';
+      if (weight && colorCode) {
+        suf3 = weight + colorCode;
+        reasonBit = `weight '${weight}' + color suffix ${suf3}`;
+      } else if (!colorCode) {
+        const defaultSuf3 = this.resolvedOsSuffix[catalogSection] || this.resolvedOsSuffix[fallbackSec];
+        if (defaultSuf3) {
+          suf3 = defaultSuf3;
+          reasonBit = `no color stated -- defaulted to selected outershell suffix ${suf3}`;
+        }
+      }
+      if (!suf3) return null;
+
+      const pricedHit = (prefix, sec) => {
+        const hits = this.cat.exactSku(`${prefix}-${suf3}`, sec).filter(({ item }) => item.rawPrice != null);
+        return hits.length ? hits[0] : null;
+      };
+
+      for (const sec of [catalogSection, fallbackSec, 'lto'].filter(Boolean)) {
+        const hit = pricedHit('PKTDIV', sec);
+        if (hit) {
+          return ['MATCH', hit.item, sec, `'Tool Pocket divider' -> confirmed PKTDIV (Tool Divider) family, ${reasonBit}`];
+        }
+      }
+      const coatHit = pricedHit('PKTDIVC', 'coat');
+      if (coatHit) {
+        return ['MATCH', coatHit.item, 'coat',
+          `'Tool Pocket divider' -> PKTDIV family is missing/corrupted for suffix ${suf3} on the pant side in the live catalog -- using the coat-side PKTDIVC equivalent as a price stand-in (same accessory, ${reasonBit}); flag if pant pricing should differ`];
+      }
+      return ['NOTE', null, null,
+        `Confirmed item (Tool Divider / PKTDIV family), but no priced row exists for suffix ${suf3} on either the pant or coat side in the live catalog -- needs a manual price lookup or a catalog update upstream.`];
+    }
+    // PKRPFF1-KV in the LTO catalog data, priced per pocket ("each") --
+    // the person bumps qty to 2 themselves for both legs, so this
+    // resolver deliberately leaves qty alone. Distinct from the colorless
+    // PKBLXPF1 family (no Kevlar option, lives in 'pfp') and from the
+    // "Sewn Flat" / "Semi" XL Bellows variants, which are different
+    // pocket constructions entirely -- this only fires on the plain "XL
+    // Bellows ... Kevlar" phrasing, not those.
+    resolveXLBellowsKevlar(text, catalogSection, fallbackSec) {
+      const low = text.toLowerCase();
+      if (!low.includes('xl bellows') && !low.includes('x-large bellows')) return null;
+      if (!low.includes('kevlar')) return null;
+      if (low.includes('sewn flat') || low.includes('semi')) return null;
+
+      const [, colorCode] = detectColor(text);
+      const weight = weightMatch(text);
+
+      for (const sec of [catalogSection, fallbackSec, 'lto'].filter(Boolean)) {
+        if (weight && colorCode) {
+          const suf3 = weight + colorCode;
+          const hits = this.cat.exactSku(`PKBLXP1-${suf3} + PKRPFF1-KV`, sec);
+          if (hits.length) {
+            const { item } = hits[0];
+            return ['MATCH', item, sec,
+              `'XL Bellows ... Kevlar' -> confirmed PKBLXP1+PKRPFF1-KV family, weight '${weight}' + color suffix ${suf3} (priced each -- adjust qty for both legs)`];
+          }
+        }
+        const defaultSuf3 = this.resolvedOsSuffix[sec] || this.resolvedOsSuffix[catalogSection];
+        if (!colorCode && defaultSuf3) {
+          const hits = this.cat.exactSku(`PKBLXP1-${defaultSuf3} + PKRPFF1-KV`, sec);
+          if (hits.length) {
+            const { item } = hits[0];
+            return ['MATCH', item, sec,
+              `'XL Bellows ... Kevlar' -> confirmed PKBLXP1+PKRPFF1-KV family, no color stated -- defaulted to selected outershell suffix ${defaultSuf3} (priced each -- adjust qty for both legs)`];
+          }
+          // Confirmed family and confirmed construction, but this exact
+          // suffix isn't in the live catalog yet -- flag clearly instead
+          // of silently guessing a price from a different suffix.
+          return ['NOTE', null, null,
+            `Confirmed family PKBLXP1-{suffix} + PKRPFF1-KV (priced each), but suffix '${defaultSuf3}' isn't in the live catalog for this family yet -- needs a manual price lookup or a catalog update upstream.`];
+        }
+      }
+      return null;
+    }
     // discrete code per exact letter count (e.g. LT2S04-SL = "4-2" sewn
     // letters", a single line covering all 4 letters), not "qty N of a
     // single-letter SKU". A spec line that spells out the literal text in
@@ -1146,6 +1250,36 @@
       const LETTERING_PREFIX_RE = /^\s*lettering\s*:\s*/i;
       const prefixed = LETTERING_PREFIX_RE.test(text);
 
+      const low = text.toLowerCase();
+      const COLOR_WORDS = [['silver', 'SS'], ['lime', 'SL'], ['orange', 'SO'], ['brilliance', 'RSL'], ['reflexite', 'RSL']];
+      let requested = null;
+      for (const [word, code] of COLOR_WORDS) {
+        if (low.includes(word)) { requested = code; break; }
+      }
+      const colorOrder = [...new Set([requested, 'SS', 'SL', 'SO', 'RSL'].filter(Boolean))];
+
+      const skuCandidates = (size, count, color) => {
+        const cc = String(count).padStart(2, '0');
+        if (color === 'RSL') {
+          const list = [`LT${size}${cc}-RSL`];
+          if (count === 1) list.push(`LTS${size}${cc}-RSL`);
+          return list;
+        }
+        const list = [`LT${size}S${cc}-${color}`];
+        if (count === 1) list.push(`LTS${size}${cc}-${color}`);
+        return list;
+      };
+
+      const findSkuForCount = (size, count, sec) => {
+        for (const color of colorOrder) {
+          for (const sku of skuCandidates(size, count, color)) {
+            const hits = this.cat.exactSku(sku, sec);
+            if (hits.length) return { item: hits[0].item, color };
+          }
+        }
+        return null;
+      };
+
       let size, raw;
       if (prefixed) {
         // Explicit prefix -- a reliable, deliberate signal from the spec
@@ -1153,12 +1287,39 @@
         // organic phrasing below: find a 2"/3" size and a bracket
         // anywhere in the remainder, in any order.
         const rest = text.replace(LETTERING_PREFIX_RE, '');
-        const bm = /<\s*([^<>]+?)\s*>/.exec(rest);
-        if (!bm) {
-          return ['NOTE', null, null,
-            "Explicit 'Lettering:' line with no bracketed text -- letter count not yet specified (e.g. \"to be specified at order\"); can't price until the exact letters are provided."];
-        }
         const sm = /([23])\s*(?:["\u201d]|in(?:ch(?:es)?)?\.?)?/.exec(rest);
+        const bm = /<\s*([^<>]+?)\s*>/.exec(rest);
+
+        if (!bm) {
+          // Confirmed policy (Steve, this round): when the exact letters
+          // aren't known yet ("to be specified at order"), don't dead-end
+          // into an unpriced NOTE if the size is already stated -- default
+          // to a single-letter SKU at that size/color and let qty stand
+          // in for the eventual letter count. Verified pricing is exactly
+          // linear per letter ($7.00/letter flat across the full 1-20
+          // letter range for 3" lime Scotchlite), so qty x unit price
+          // gives an exact total once the real count is known -- this is
+          // exact pricing, not an approximation. The one caveat: the SKU
+          // shown on a multi-letter row will be the 1-letter code with
+          // qty applied, not the catalog's own combined-count SKU string.
+          if (!sm) {
+            return ['NOTE', null, null,
+              "Explicit 'Lettering:' line with no bracketed text and no 2\" or 3\" size stated -- can't price until the exact letters (and size) are provided."];
+          }
+          size = sm[1];
+          const pools = catalogSection === 'coat' ? ['coat'] : [catalogSection, 'coat'];
+          for (const sec of pools) {
+            const found = findSkuForCount(size, 1, sec);
+            if (found) {
+              const colorNote = requested ? `'${found.color}' as stated` : `no color stated -- defaulted to ${found.color} (price is the same across colors)`;
+              const perLetter = found.item.rawPrice != null ? `$${found.item.rawPrice.toFixed(2)}/letter` : 'price TBD';
+              return ['MATCH', found.item, sec,
+                `Letter count not yet specified ("to be specified at order") -- defaulted to a 1-letter ${size}" SKU (${colorNote}); priced per letter (${perLetter}) -- adjust qty to the real letter count once known for an exact total.`];
+            }
+          }
+          return ['NOTE', null, null,
+            `Letter count not yet specified, and no 1-letter ${size}" SKU was found to default to -- needs a manual pick once the exact letters are provided.`];
+        }
         if (!sm) {
           return ['NOTE', null, null,
             "Explicit 'Lettering:' line has bracketed text but no 2\" or 3\" size stated -- can't price without knowing the size."];
@@ -1174,38 +1335,14 @@
       }
       const count = (raw.match(/[A-Za-z0-9]/g) || []).length;
       if (count < 1) return null;
-      const cc = String(count).padStart(2, '0');
-
-      const low = text.toLowerCase();
-      const COLOR_WORDS = [['silver', 'SS'], ['lime', 'SL'], ['orange', 'SO'], ['brilliance', 'RSL'], ['reflexite', 'RSL']];
-      let requested = null;
-      for (const [word, code] of COLOR_WORDS) {
-        if (low.includes(word)) { requested = code; break; }
-      }
-      const colorOrder = [...new Set([requested, 'SS', 'SL', 'SO', 'RSL'].filter(Boolean))];
-
-      const skuCandidates = (color) => {
-        if (color === 'RSL') {
-          const list = [`LT${size}${cc}-RSL`];
-          if (count === 1) list.push(`LTS${size}${cc}-RSL`);
-          return list;
-        }
-        const list = [`LT${size}S${cc}-${color}`];
-        if (count === 1) list.push(`LTS${size}${cc}-${color}`);
-        return list;
-      };
 
       const pools = catalogSection === 'coat' ? ['coat'] : [catalogSection, 'coat'];
       for (const sec of pools) {
-        for (const color of colorOrder) {
-          for (const sku of skuCandidates(color)) {
-            const hits = this.cat.exactSku(sku, sec);
-            if (hits.length) {
-              const colorNote = requested ? `'${color}' as stated` : `no color stated -- defaulted to ${color} (price is the same across colors)`;
-              return ['MATCH', hits[0].item, sec,
-                `${count}-letter ${size}" lettering decoded from '<${raw}>' -- ${colorNote}`];
-            }
-          }
+        const found = findSkuForCount(size, count, sec);
+        if (found) {
+          const colorNote = requested ? `'${found.color}' as stated` : `no color stated -- defaulted to ${found.color} (price is the same across colors)`;
+          return ['MATCH', found.item, sec,
+            `${count}-letter ${size}" lettering decoded from '<${raw}>' -- ${colorNote}`];
         }
       }
       return ['NOTE', null, null,
@@ -1250,7 +1387,7 @@
         `Confirmed via tech-pack reference as '${entry.description}' (Old Kit# ${entry.oldKit}), but couldn't locate the exact catalog row -- needs a manual check.`];
     }
 
-    matchLine(section, catalogSection, text, isHeader) {
+    matchLine(section, catalogSection, text, isHeader, noteText) {
       if (isHeader) {
         const matches = this.resolveHeader(section, catalogSection, text);
         if (matches.length) {
@@ -1281,6 +1418,20 @@
           return MatchResult(text, section, 'CROSSWALK',
             [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
             'resolved via bracket-lettering count decode');
+        }
+      }
+
+      const xlBellowsKevlarHit = this.resolveXLBellowsKevlar(text, catalogSection, fallbackSec);
+      if (xlBellowsKevlarHit) {
+        const kind = xlBellowsKevlarHit[0];
+        if (kind === 'NOTE') {
+          const [, , , why] = xlBellowsKevlarHit;
+          return MatchResult(text, section, 'NOTE', [], why);
+        } else {
+          const [, item, sec, why] = xlBellowsKevlarHit;
+          return MatchResult(text, section, 'CROSSWALK',
+            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            'resolved via confirmed XL Bellows + Kevlar -> PKBLXP1+PKRPFF1-KV mapping');
         }
       }
 
@@ -1320,6 +1471,20 @@
         return MatchResult(text, section, 'CROSSWALK',
           [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
           'resolved via confirmed double-notch radio pocket rule');
+      }
+
+      const toolDividerHit = this.resolveToolDivider(text, catalogSection, fallbackSec);
+      if (toolDividerHit) {
+        const kind = toolDividerHit[0];
+        if (kind === 'NOTE') {
+          const [, , , why] = toolDividerHit;
+          return MatchResult(text, section, 'NOTE', [], why);
+        } else {
+          const [, item, sec, why] = toolDividerHit;
+          return MatchResult(text, section, 'CROSSWALK',
+            [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: 'high', reason: why }],
+            'resolved via confirmed Tool Divider (PKTDIV) family mapping');
+        }
       }
 
       const narrowKneeHit = this.resolveNarrowKnee(text, catalogSection, fallbackSec);
@@ -1460,6 +1625,43 @@
       }
 
       // 3. fuzzy description match across the section's catalog pool
+      //
+      // Confirmed real-world case: a line can be nothing but an
+      // unrecognized/fake code with the actual product description
+      // relegated entirely into an inline "N:" note (e.g. "HCRCVS-S2X9 N:
+      // Right Chest Large Reverse Clip w 2"x9" Velcro Strap" -- "HCRCVS-
+      // S2X9" isn't a real catalog SKU at all, and specParser.js strips
+      // everything after "N:" into a separate note field that's normally
+      // never matched against the catalog). When that happens, `text`
+      // alone has zero real descriptive words to fuzzy-score against, so
+      // matching fails completely even though the actual description was
+      // sitting right there in the note. This computes whether `text`
+      // reduces to essentially just bare code(s) once the extracted
+      // codes are stripped out; if so AND a note was provided, the note's
+      // text is folded in for fuzzy SCORING ONLY -- literal/crosswalk
+      // extraction above and material/color detection below still run on
+      // bare `text` alone, preserving the original design intent that
+      // notes don't drive literal matching. This is deliberately narrow:
+      // any line with real descriptive words of its own is untouched.
+      let fuzzyScoringText = text;
+      if (noteText) {
+        // Only strip tokens that actually look like codes (carry a digit
+        // or hyphen) -- extractCodes() also matches plain words that
+        // happen to coincidentally be a catalog stem (e.g. "Mic" matches
+        // because some unrelated SKU starts with MIC), which would
+        // otherwise make an ordinary descriptive word look like bare
+        // code residue and pull in note text it doesn't need.
+        const codeLikeTokens = codes.filter((c) => /[0-9]/.test(c) || c.includes('-'));
+        let residue = text;
+        for (const c of codeLikeTokens) {
+          residue = residue.replace(new RegExp(c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+        }
+        const residueWords = (residue.match(/[A-Za-z]{3,}/g) || []);
+        if (residueWords.length < 2) {
+          fuzzyScoringText = text + ' ' + noteText;
+        }
+      }
+
       // topN raised 8 -> 40 (Bug 1 fix): color-variant siblings of the same
       // product share near-identical description text and tie on raw
       // word-overlap score; with topN=8 the correct-suffix sibling could be
@@ -1467,9 +1669,9 @@
       // to rerank it. 40 is generous enough to keep the full variant family
       // in play while the score-proximity filter a few lines down (within
       // 0.20 of the top raw score) still keeps the rerank loop cheap.
-      let fuzzy = this.cat.fuzzyInSection(text, catalogSection, null, 40);
+      let fuzzy = this.cat.fuzzyInSection(fuzzyScoringText, catalogSection, null, 40);
       if (fallbackSec && (!fuzzy.length || fuzzy[0].score < 0.38)) {
-        const fuzzyFb = this.cat.fuzzyInSection(text, fallbackSec, null, 40);
+        const fuzzyFb = this.cat.fuzzyInSection(fuzzyScoringText, fallbackSec, null, 40);
         if (fuzzyFb.length && (!fuzzy.length || fuzzyFb[0].score > fuzzy[0].score)) {
           fuzzy = fuzzyFb;
           catalogSection = fallbackSec;
@@ -1483,10 +1685,17 @@
           let bonus = 0.0;
           const vcode = variantCode(item).toUpperCase();
           if (materialCode && (item.sku.includes(materialCode) || vcode.includes(materialCode))) bonus += 0.30;
-          if (colorCode && (item.sku.endsWith(colorCode) || vcode.endsWith(colorCode))) bonus += 0.10;
-          if (!colorCode && !materialCode && this.resolvedOsSuffix[catalogSection]) {
+          if (colorCode && (comboPartEndsWith(item.sku, colorCode) || comboPartEndsWith(vcode, colorCode))) bonus += 0.10;
+          // No color stated -- default to the build's resolved outershell
+          // suffix regardless of whether a material (e.g. "Kevlar") was
+          // also stated; material and color-suffix bonuses are independent
+          // and both apply when both conditions hold (Bug fix: previously
+          // gated on `!materialCode` too, which meant a Kevlar-lined combo
+          // SKU never got credit for carrying the right color suffix, even
+          // when the catalog had the exact correctly-suffixed combo row).
+          if (!colorCode && this.resolvedOsSuffix[catalogSection]) {
             const suf3 = this.resolvedOsSuffix[catalogSection];
-            if (item.sku.endsWith(suf3) || vcode.endsWith(suf3)) bonus += 0.30;
+            if (comboPartEndsWith(item.sku, suf3) || comboPartEndsWith(vcode, suf3)) bonus += 0.30;
           }
           return score + bonus;
         };
@@ -1505,16 +1714,16 @@
         const materialMatched = materialCode && (item.sku.includes(materialCode) || itemVcode.includes(materialCode));
         const materialSubstituted = materialCode === 'SS' && !materialMatched &&
           (item.sku.includes('AR') || itemVcode.includes('AR') || (item.description || '').toLowerCase().includes('arashield'));
-        const osDefaultMatched = !colorCode && !materialCode && this.resolvedOsSuffix[catalogSection] &&
-          (item.sku.endsWith(this.resolvedOsSuffix[catalogSection]) || itemVcode.endsWith(this.resolvedOsSuffix[catalogSection]));
+        const osDefaultMatched = !colorCode && this.resolvedOsSuffix[catalogSection] &&
+          (comboPartEndsWith(item.sku, this.resolvedOsSuffix[catalogSection]) || comboPartEndsWith(itemVcode, this.resolvedOsSuffix[catalogSection]));
 
         const structuredCorroboration = (materialMatched || materialSubstituted || osDefaultMatched) &&
-          (!colorCode || item.sku.endsWith(colorCode) || itemVcode.endsWith(colorCode));
+          (!colorCode || comboPartEndsWith(item.sku, colorCode) || comboPartEndsWith(itemVcode, colorCode));
 
         if (Math.max(score, topScore) >= 0.45 || structuredCorroboration) {
           let confidence;
           if (materialSubstituted) {
-            confidence = (colorCode && (item.sku.endsWith(colorCode) || itemVcode.endsWith(colorCode))) ? 'high' : 'medium';
+            confidence = (colorCode && (comboPartEndsWith(item.sku, colorCode) || comboPartEndsWith(itemVcode, colorCode))) ? 'high' : 'medium';
           } else if (osDefaultMatched) {
             confidence = 'high';
           } else if (structuredCorroboration && colorCode) {
@@ -1526,7 +1735,9 @@
           if (materialSubstituted) {
             extraFlag = ' -- Stedshield not offered for this item; substituted Arashield (confirmed policy)';
           } else if (osDefaultMatched) {
-            extraFlag = ` -- no color specified, defaulted to selected outershell suffix ${this.resolvedOsSuffix[catalogSection]} (confirmed policy)`;
+            extraFlag = materialMatched
+              ? ` -- material '${materialWord}' matched + no color specified, defaulted to selected outershell suffix ${this.resolvedOsSuffix[catalogSection]} (confirmed policy)`
+              : ` -- no color specified, defaulted to selected outershell suffix ${this.resolvedOsSuffix[catalogSection]} (confirmed policy)`;
           } else if (materialCode && !materialMatched) {
             confidence = 'low';
             extraFlag = ` -- NOTE: no candidate's SKU carries the '${materialCode}' (${materialWord}) infix; this may not exist in the catalog`;
@@ -1914,7 +2125,6 @@
   const SECTION_HINT = {
     coat: /\b(coat|jacket)\b/i,
     pant: /\b(pants?|trousers?)\b/i,
-    suspenders: /\b(suspenders?)\b/i,
   };
 
   // Common bullet/numbering prefixes people paste from email clients.
@@ -1990,13 +2200,29 @@
 
       // Re-evaluate section on every line, not just when unset -- many
       // real pasted emails have no explicit section labels at all (see
-      // the original IHB spec this was modeled on). Coat/pant/suspender
-      // vocabulary is disjoint enough in practice that a keyword hit for
-      // a *different* section than the current one is a reliable signal
-      // of a real transition, and becomes that new section's header line.
+      // the original IHB spec this was modeled on). Coat/pant vocabulary
+      // is disjoint enough in practice that a keyword hit for a
+      // *different* section than the current one is a reliable signal of
+      // a real transition, and becomes that new section's header line.
+      //
+      // Confirmed bug (Steve's test spec): 'suspenders' is deliberately
+      // excluded from this generic re-evaluation. Unlike coat/pant words,
+      // "Suspenders" routinely shows up as part of an ordinary PANT-
+      // section item's own description (e.g. "SPDFBLKSQMI Dyna-Fit
+      // Suspenders - BLACK w/ Snap Attach & Metal QA", "SP-5301 Padding
+      // for suspenders") rather than signaling a real section switch --
+      // and once it fired, every subsequent pant line (XL Bellows,
+      // dividers, drop-bag rings, cuffs, etc.) silently inherited
+      // 'suspenders' as its section for the rest of the document, with no
+      // coat/pant keyword ever appearing again to switch it back. A
+      // genuine standalone Suspenders section is virtually always
+      // introduced with an explicit header line ("Suspenders:" or
+      // standalone "Suspenders"), which the SECTION_LABEL_ONLY_RE /
+      // SECTION_LABEL_PREFIX_RE checks above already handle correctly --
+      // this generic fallback doesn't need to also guess at it from bare
+      // keyword mentions.
       let detectedSection = null;
-      if (SECTION_HINT.suspenders.test(trimmed)) detectedSection = 'suspenders';
-      else if (SECTION_HINT.pant.test(trimmed)) detectedSection = 'pant';
+      if (SECTION_HINT.pant.test(trimmed)) detectedSection = 'pant';
       else if (SECTION_HINT.coat.test(trimmed)) detectedSection = 'coat';
 
       if (!currentSection) {
@@ -2125,7 +2351,7 @@
         catalogSection = 'suspenders';
       }
       sectionsSeen.add(line.section);
-      const res = matcher.matchLine(line.section, catalogSection, line.text, line.isHeader);
+      const res = matcher.matchLine(line.section, catalogSection, line.text, line.isHeader, line.note);
       if (res.status === 'MULTI' && res.subResults && res.subResults.length) {
         res.subResults.forEach((sub) => {
           rows.push({
