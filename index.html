@@ -137,6 +137,8 @@
   }
   .search-wrap input.is-suggestion { color: #8A6200; font-style: italic; border-color: var(--gold); }
   .suggestion-hint { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .search-wrap input.revert-flash { border-color: var(--red); box-shadow: 0 0 0 2px rgba(185,28,28,0.18); transition: box-shadow 0.2s, border-color 0.2s; }
+  .revert-warning { font-size: 10px; color: var(--red); margin-top: 2px; font-weight: 600; }
   .search-results {
     position: absolute; z-index: 20; top: 100%; left: 0; right: 0;
     max-height: 220px; overflow-y: auto; margin: 0; padding: 0;
@@ -1032,6 +1034,105 @@
       return null;
     }
 
+    // Confirmed domain rule (Bug 3 fix): "Narrow Knee" lines map to the
+    // KNBFN family. Two compounding issues previously routed these to
+    // NOTE: (1) the shared weightMatch() helper grabs the *first* 2-digit
+    // run anywhere in the text, which on these lines is the knee-model
+    // token ("K17") rather than the real weight stated later ("75"); (2)
+    // raw fuzzy word-overlap between "Narrow Knee" and KNBFN's catalog
+    // description is too weak to clear the generic fuzzy floor on its
+    // own. Per the handoff's explicit guidance, this scopes the weight-
+    // extraction fix narrowly to this resolver (stripping the "K\d\d"
+    // token before running the same first-2-digit-run pattern) rather
+    // than changing weightMatch() itself, since other call sites may
+    // depend on its current "first run" behavior.
+    resolveNarrowKnee(text, catalogSection, fallbackSec) {
+      const low = text.toLowerCase();
+      if (!low.includes('narrow knee')) return null;
+
+      const strippedForWeight = text.replace(/\bK\d{2}\b/gi, ' ');
+      const weightM = /(\d{2})/.exec(strippedForWeight);
+      const weight = weightM ? weightM[1] : null;
+      const [colorWord, colorCode] = detectColor(text);
+
+      const prefix = 'KNBFN';
+      for (const sec of [catalogSection, fallbackSec].filter(Boolean)) {
+        if (weight && colorCode) {
+          const suf = weight + colorCode;
+          const hits = this.cat.exactSku(`${prefix}-${suf}`, sec);
+          if (hits.length) {
+            const { item } = hits[0];
+            return [item, sec,
+              `'Narrow Knee' keyword -> KNBFN family, weight '${weight}' + color '${colorWord}' -> suffix ${suf} (confirmed mapping)`,
+              'high'];
+          }
+        }
+        if (!colorCode && this.resolvedOsSuffix[sec]) {
+          const suf3 = this.resolvedOsSuffix[sec];
+          const hits = this.cat.exactSku(`${prefix}-${suf3}`, sec);
+          if (hits.length) {
+            const { item } = hits[0];
+            return [item, sec,
+              `'Narrow Knee' keyword -> KNBFN family, no color specified -- defaulted to selected outershell suffix ${suf3} (confirmed policy)`,
+              'high'];
+          }
+        }
+        const family = this.cat.skuPrefix(prefix, sec);
+        if (family.length) {
+          const scored = [...family].sort((a, b) =>
+            wordOverlapScore(text, scoreTextForItem(b.item)) - wordOverlapScore(text, scoreTextForItem(a.item)));
+          const { item } = scored[0];
+          const gapNote = (weight && colorCode)
+            ? ` -- NOTE: ideal suffix '${weight}${colorCode}' not found in KNBFN family; fell back to closest available variant`
+            : '';
+          return [item, sec, `'Narrow Knee' keyword -> KNBFN family, best available variant${gapNote}`, 'medium'];
+        }
+      }
+      return null;
+    }
+
+    // Confirmed domain rule (Bug 2 fix): a radio-pocket line that calls out
+    // a notch flap on BOTH sides ("notch flap left & Right", "left and
+    // right", "both") always resolves to the double-notch SKU PKRD-FN2, not
+    // to a single-side FNL/FNR pick. Previously this fell straight through
+    // to generic fuzzy text matching, which favored FNL/FNR on raw word
+    // overlap since "left" or "right" individually scores higher against a
+    // single-side description than the combined phrase does against the
+    // double-notch one. Deliberately scoped tight: only fires when the line
+    // mentions "notch" AND both side-words (or an explicit both/left-and-
+    // right phrase) -- a single-side notch line ("notch flap left" alone)
+    // returns null here and falls through to the ordinary fuzzy pipeline,
+    // which (after the Bug 1 topN fix) already differentiates FNL vs FNR
+    // correctly on its own.
+    resolveRadioPocket(text, catalogSection, fallbackSec) {
+      const low = text.toLowerCase();
+      if (!low.includes('notch')) return null;
+      const mentionsLeft = /\bleft\b/.test(low);
+      const mentionsRight = /\bright\b/.test(low);
+      const explicitBoth = low.includes('both') || low.includes('left & right') ||
+        low.includes('left and right') || low.includes('left&right');
+      if (!explicitBoth && !(mentionsLeft && mentionsRight)) return null;
+
+      for (const sec of [catalogSection, fallbackSec].filter(Boolean)) {
+        const hits = this.cat.exactSku('PKRD-FN2', sec);
+        if (hits.length) {
+          const { item } = hits[0];
+          return [item, sec,
+            "double-notch radio pocket detected ('notch' + both sides) -- hard-routed to confirmed PKRD-FN2 (double-notch family), not single-side FNL/FNR (confirmed policy)",
+            'high'];
+        }
+      }
+      // Catalog section filter didn't find it -- try unfiltered as a last resort.
+      const anyHits = this.cat.exactSku('PKRD-FN2');
+      if (anyHits.length) {
+        const { section: sec, item } = anyHits[0];
+        return [item, sec,
+          "double-notch radio pocket detected ('notch' + both sides) -- hard-routed to confirmed PKRD-FN2 (double-notch family), not single-side FNL/FNR (confirmed policy)",
+          'high'];
+      }
+      return null;
+    }
+
     // Confirmed by Steve via lettering.csv: lettering SKUs are sold as one
     // discrete code per exact letter count (e.g. LT2S04-SL = "4-2" sewn
     // letters", a single line covering all 4 letters), not "qty N of a
@@ -1213,6 +1314,22 @@
           'resolved via confirmed cuff family + material/color mapping');
       }
 
+      const radioPocketHit = this.resolveRadioPocket(text, catalogSection, fallbackSec);
+      if (radioPocketHit) {
+        const [item, sec, why, conf] = radioPocketHit;
+        return MatchResult(text, section, 'CROSSWALK',
+          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
+          'resolved via confirmed double-notch radio pocket rule');
+      }
+
+      const narrowKneeHit = this.resolveNarrowKnee(text, catalogSection, fallbackSec);
+      if (narrowKneeHit) {
+        const [item, sec, why, conf] = narrowKneeHit;
+        return MatchResult(text, section, 'CROSSWALK',
+          [{ sku: item.sku, section: sec, category: item.category, description: item.description, price: item.price, confidence: conf, reason: why }],
+          "resolved via confirmed 'Narrow Knee' -> KNBFN family mapping");
+      }
+
       const codes = extractCodes(text, this.cat.stemVocab);
 
       // Multi-item safety net: if 2+ distinct codes in this single line
@@ -1343,9 +1460,16 @@
       }
 
       // 3. fuzzy description match across the section's catalog pool
-      let fuzzy = this.cat.fuzzyInSection(text, catalogSection, null, 8);
+      // topN raised 8 -> 40 (Bug 1 fix): color-variant siblings of the same
+      // product share near-identical description text and tie on raw
+      // word-overlap score; with topN=8 the correct-suffix sibling could be
+      // sliced off before the resolved-suffix bonus below ever got a chance
+      // to rerank it. 40 is generous enough to keep the full variant family
+      // in play while the score-proximity filter a few lines down (within
+      // 0.20 of the top raw score) still keeps the rerank loop cheap.
+      let fuzzy = this.cat.fuzzyInSection(text, catalogSection, null, 40);
       if (fallbackSec && (!fuzzy.length || fuzzy[0].score < 0.38)) {
-        const fuzzyFb = this.cat.fuzzyInSection(text, fallbackSec, null, 8);
+        const fuzzyFb = this.cat.fuzzyInSection(text, fallbackSec, null, 40);
         if (fuzzyFb.length && (!fuzzy.length || fuzzyFb[0].score > fuzzy[0].score)) {
           fuzzy = fuzzyFb;
           catalogSection = fallbackSec;
@@ -2161,7 +2285,7 @@
         (row.reasoning ? '<div class="reasoning">' + escapeHtml(row.reasoning) + '</div>' : '') + '</td>' +
         '<td class="col-match">' + matchCellHtml(row, i) + '</td>' +
         '<td class="col-price" data-i="' + i + '">' + priceCellHtml(row, i) + '</td>' +
-        '<td class="col-qty"><input type="number" min="1" value="' + row.qty + '" data-i="' + i + '" class="qtyInput"></td>' +
+        '<td class="col-qty"><input type="number" min="1" value="' + row.qty + '" data-i="' + i + '" class="qtyInput"' + (row.matches.length === 0 ? ' disabled title="No resolved item on this row yet \u2014 nothing to multiply"' : '') + '></td>' +
         '<td class="col-grade" data-i="' + i + '">' + gradeCellHtml(row, i) + '</td>' +
         '<td class="col-confirm">' +
         (needsConfirm ? '<input type="checkbox" class="confirmCheck" data-i="' + i + '"' + (row.confirmed ? ' checked' : '') + '>' : '') +
@@ -2251,16 +2375,99 @@
     refreshRowPendingClass(i);
   }
 
+  // Strips a display-formatted "SKU — description" string down to just the
+  // SKU portion the user actually typed or that's currently shown, so it
+  // can be tried as a literal catalog lookup.
+  function extractTypedSku(val) {
+    const v = String(val || '').trim();
+    if (!v) return null;
+    const dashIdx = v.indexOf('\u2014');
+    const skuPart = (dashIdx >= 0 ? v.slice(0, dashIdx) : v).trim();
+    return skuPart || null;
+  }
+
+  function flashRevertWarning(i) {
+    const input = document.querySelector('.searchInput[data-i="' + i + '"]');
+    if (!input) return;
+    input.classList.add('revert-flash');
+    const wrap = input.closest('.search-wrap');
+    let warn = wrap && wrap.querySelector('.revert-warning');
+    if (wrap && !warn) {
+      warn = document.createElement('div');
+      warn.className = 'revert-warning';
+      warn.textContent = "Typed text wasn't a recognized SKU \u2014 reverted to the previous match.";
+      wrap.appendChild(warn);
+    }
+    setTimeout(() => {
+      input.classList.remove('revert-flash');
+      if (warn && warn.parentNode) warn.parentNode.removeChild(warn);
+    }, 3000);
+  }
+
   function onMatchBodyFocusOut(e) {
     if (!e.target.classList.contains('searchInput')) return;
     const i = +e.target.dataset.i;
+    const typedVal = e.target.value;
+    const row = rows[i];
+    // Capture the searchedItem reference *before* the delay -- if a
+    // dropdown click (mousedown) lands during this same blur window, it
+    // reassigns row.searchedItem and already re-renders the cell itself.
+    // Comparing references afterward lets us tell "a pick just happened"
+    // apart from "nothing happened, the typed text is just stale," so we
+    // don't second-guess (or warn about) a successful dropdown pick.
+    const searchedAtFocusStart = row ? row.searchedItem : null;
     setTimeout(() => {
       const ul = document.querySelector('.search-results[data-i="' + i + '"]');
       if (ul) ul.style.display = 'none';
-      // Snap the box back to whatever is actually resolved if the user
-      // typed something but never picked a result from the list -- the
-      // displayed text should never disagree with what's really priced.
+      if (!row) return;
+
+      if (row.searchedItem !== searchedAtFocusStart) {
+        // A dropdown pick already landed and re-rendered this cell.
+        refreshMatchCell(i);
+        return;
+      }
+
+      // Bug 4 fix: compare what's typed against what's actually committed
+      // right now (resolved item if any, else the matcher's suggestion --
+      // covers BOTH a never-resolved row and a row that already has an
+      // earlier committed pick). If nothing changed, stay silent. If it
+      // changed and wasn't a dropdown click, try the typed text as a
+      // literal SKU before reverting -- a real, unambiguous SKU commits
+      // the same way a dropdown click would. Only fall back to reverting
+      // (now with a visible warning instead of a silent snap-back) when
+      // the typed text doesn't resolve to anything real.
+      const currentResolved = row.searchedItem ? row.searchedItem.item : null;
+      const currentSuggestion = row.matches.length ? row.matches[row.chosenIdx >= 0 ? row.chosenIdx : 0] : null;
+      const currentDisplay = currentResolved
+        ? currentResolved.sku + ' \u2014 ' + (currentResolved.description || '')
+        : currentSuggestion
+          ? currentSuggestion.sku + ' \u2014 ' + (currentSuggestion.description || '')
+          : '';
+      const typedTrimmed = (typedVal || '').trim();
+      if (typedTrimmed === currentDisplay.trim()) {
+        refreshMatchCell(i);
+        return;
+      }
+
+      const typedSku = extractTypedSku(typedVal);
+      if (typedSku) {
+        let hits = catIdx.exactSku(typedSku, row.catalogSection);
+        if (!hits.length) hits = catIdx.exactSku(typedSku);
+        if (hits.length === 1) {
+          row.searchedItem = { item: hits[0].item };
+          row.chosenIdx = -1;
+          row.confirmed = true;
+          refreshMatchCell(i);
+          const cb = document.querySelector('.confirmCheck[data-i="' + i + '"]');
+          if (cb) cb.checked = true;
+          refreshRowDerived(i);
+          refreshRowPendingClass(i);
+          return;
+        }
+      }
+
       refreshMatchCell(i);
+      if (typedTrimmed) flashRevertWarning(i);
     }, 150);
   }
 
